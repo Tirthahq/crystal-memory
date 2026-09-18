@@ -6,12 +6,78 @@
 > useful thing that can happen right now and we want the details. Open an issue and say which step you
 > were on.
 
-**A note you write once, that arrives in your coding agent's context at the moment it is about to make
-the mistake the note prevents.**
+**Your coding agent keeps making the same mistake. You already wrote the rule down. It is in a file the agent does not read at the moment it matters.**
 
-Selection is literal. A crystal binds to an **act** (running a command, writing a file, making a commit) and to the text of
-that specific act. When you are about to type `npm run build 2>&1 | tail -20`, the one about pipes
-eating exit codes arrives. When you are about to type `ls`, nothing does.
+Crystals is a small memory layer for [Claude Code](https://claude.com/claude-code). You write a note once, you say which *action* it belongs to, and from then on it appears in the agent's context in the second before it takes that action. Nobody searches for it. Nobody has to remember it exists.
+
+They are called crystals because each one is a single knowing, compressed until it fits in the small space you get at the moment of an action, and then left alone.
+
+## What it actually is
+
+Three ways to get knowledge to a coding agent. The third one is this project.
+
+**1. Put it in a rules file.** `CLAUDE.md`, a contributing guide, a long standards document. It is always loaded, so it competes for room with everything else, and it grows until nobody re-reads it. The agent sees all of it on every single turn, which sounds thorough and means it is background noise by the second page. Worst of all, the specific line that would have saved you is sitting in paragraph forty of a file about something else.
+
+**2. Put it in a search index.** RAG, embeddings, a wiki, a vector store. This works, and we run one too. But a search only happens if somebody decides to search. That decision is exactly what you skip when you are about to do something you believe is fine. **You cannot look up the mistake you do not know you are about to make**, because forming the query means already suspecting it.
+
+**3. Attach it to the action.** This project. A note declares which action it belongs to, and some words that have to appear in that action. Claude Code lets a hook run just before it takes an action, so at that instant we look at what it is about to do, find the notes that match, and put them in front of it. The agent did not ask. It did not know the note existed.
+
+So the difference is not smarter search. It is that **nobody has to decide to go looking.** A rules file is always there and therefore ignored. A search index is precise and only reaches people already close to the answer. This is neither: it is quiet almost all of the time, and it speaks in the one second where the note is the only thing that matters.
+
+The cost, and it is real: someone has to write the notes, one at a time, and mean them. There is no pipeline that generates these from your codebase. We tried that and it invented a statistic that appeared nowhere in the source. A note that arrives unasked, in the voice of settled fact, is dangerous in a way a search result is not, so a human writes every one.
+
+## Show me
+
+Here is a real note from the starter set. The top half is bookkeeping. The `match:` line is the whole trick, and the text between the markers is the only part that ever gets delivered.
+
+```yaml
+---
+name: crystal-exit-code-through-a-pipe
+trigger: piping a build/test command into head, tail or grep; about to claim build-green from piped output
+crystal:
+  deliver: act              # push it, do not wait to be asked
+  on: bash                  # the action it belongs to
+  match: "| tail, |tail, | head, |head, | grep, |grep, ssh , ssm"
+---
+
+<!-- crystal:essence -->
+⛔ **`cmd | tail` REPORTS TAIL'S EXIT CODE, NOT `cmd`'s** — a failing build reads as PASS.
+And the bash escape hatch **`${PIPESTATUS[0]}` is silently EMPTY in zsh**: it prints `EXIT=`
+with no error at all, which looks like success to a hurried eye. zsh's array is lowercase and
+1-indexed, **`${pipestatus[1]}`**. Safest: run it clean —
+`cmd > /dev/null 2>&1; echo "EXIT=$?"`.
+<!-- /crystal:essence -->
+```
+
+Now the agent goes to run `npm run build 2>&1 | tail -20`. Before the command executes, this lands in its context:
+
+```
+✦ CRYSTAL — you are about to bash. This knowing is bound to that act, not matched by topic:
+✦ ⛔ **`cmd | tail` REPORTS TAIL'S EXIT CODE, NOT `cmd`'s** — a failing build reads as PASS.
+  And the bash escape hatch **`${PIPESTATUS[0]}` is silently EMPTY in zsh** …
+```
+
+Run `ls -la` instead and **nothing arrives**. Selection is literal: the note binds to an action *and* to the text of that specific action, so a store of two hundred notes stays quiet until one of them is about the thing you are actually doing.
+
+That is the entire idea. The rest of this page is what we learned running it.
+
+## What you need
+
+- **Claude Code**, because delivery uses its hooks. The notes themselves are plain markdown and portable; the push mechanism is Claude Code specific today.
+- **Python 3**, standard library only. No packages to install, no service, no account, no network calls.
+- **A git repo** to put it in. It writes to two directories inside that repo and nowhere else.
+
+## Try it without installing anything
+
+```sh
+git clone https://github.com/tjonesit/crystal-memory
+cd crystal-memory
+python3 scripts/crystal_starter.py selftest
+```
+
+That builds a throwaway repo in a temp directory, seeds three crystals and proves the whole loop end to end: an empty store refuses, each note fires on its own trigger, the store stays silent on an unrelated command, re-seeding never overwrites your edits, and a note stripped of its markers turns the doctor red. Fifteen checks. Nothing is written outside the temp directory.
+
+Then **[INSTALL.md](INSTALL.md)** puts it in your own repo in about five minutes.
 
 ---
 
@@ -38,21 +104,6 @@ your time before you decide:
 
 If those sound like problems you have, this is a 5 minute install with no service and no account.
 If your rules are already enforced by CI and linters, you probably do not need it.
-
----
-
-## Try it
-
-```sh
-python3 scripts/crystal_starter.py selftest
-```
-
-That builds a throwaway repo in a temp directory, seeds three crystals, and proves the whole loop:
-the empty store refuses, each crystal registers and fires on its own trigger, the store stays silent on
-an unrelated command, re-seeding never overwrites, and a crystal stripped of its essence marker turns
-the doctor red. Nothing is written outside the temp directory.
-
-Then **[INSTALL.md](INSTALL.md)** puts it in your repo in five minutes.
 
 ---
 
