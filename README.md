@@ -1,5 +1,11 @@
 # Crystals
 
+> ⚠️ **IN TESTING.** This is a working system we run on our own repository every day, packaged for
+> other people for the first time. It has not yet been installed by anybody outside our team, so the
+> thing most likely to be broken is the install, not the engine. If it fails for you, that is the most
+> useful thing that can happen right now and we want the details. Open an issue and say which step you
+> were on.
+
 **A note you write once, that arrives in your coding agent's context at the moment it is about to make
 the mistake the note prevents.**
 
