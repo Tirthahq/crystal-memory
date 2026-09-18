@@ -22,8 +22,11 @@ your time before you decide:
   the precise command it was written to prevent, and the mistake happened anyway, because the channel
   we used speaks *after* the command runs. Speaking and blocking are different tools and picking wrong
   is invisible.
-- **Noise costs accuracy.** An irrelevant note took a task our model already did perfectly from 100% to
-  35%, which is a larger cost than the slot it occupies. Hence the narrow matching and the small budget.
+- **Noise can cost accuracy, on some models.** An irrelevant note took a task our cheap tier already
+  did perfectly from 100% to 35%. We re-ran that on two other model families in September and the
+  harm did **not** reproduce on either: the irrelevant note scored about the same as delivering
+  nothing at all. So the narrow matching and the small budget are cheap insurance against a cost we
+  have measured once and failed to reproduce twice, not a law.
 - **A note rots while looking exactly as confident as the day you wrote it.** 9% of ours had drifted
   from their sources when we last measured, so the store checks for that and says so.
 
@@ -67,8 +70,13 @@ deliberate thing for you to add.
 
 ## Honest limits
 
-- Measured on one repo, by one team, mostly against one model family. The failure modes above are ours;
-  whether they are yours is exactly what we would like a second pair of hands to find out.
+- Measured on one repo, by one team. We have now run the behavioural holdout on three model
+  families. **One scenario separated cleanly on all three** (crystal arm perfect, placebo and
+  dropped arms at zero). The others did not replicate, and the reason is visible in the data rather
+  than mysterious: the dropped arm already scored high, meaning that model already knew the thing.
+  **A crystal cannot help where the model is not going to make the mistake**, so which notes earn
+  their slot depends on the model you run. The corpus is still ours either way, which is exactly
+  what we would like a second pair of hands to fix.
 - Selection is literal matching. A `match:` list that is too broad fires on everything and costs you
   accuracy; too narrow and it never fires. There is no tuning loop yet, only your judgement.
 - The freshness check detects **drift** and stops there. It knows the source moved; whether the note is
