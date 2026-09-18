@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-crystal_registry.py — the binding convention for FROM-WITHIN crystal deployment (Tom, 2026-07-11:
+crystal_registry.py — the binding convention for FROM-WITHIN crystal deployment (the maintainer, 2026-07-11:
 "implement crystals in everyday deployments, so adding them is as natural as everything else").
 
 A crystal is any node whose frontmatter carries a `crystal:` binding block. The delivery channels (boot,
 inject, rag, serve, bytes) QUERY this registry instead of hardcoding paths — so the Nth crystal is drop-in:
 write the node, declare its binding, done. No per-crystal wiring. The binding encodes the measured 2×2 law
-(deliver only where the rule is ABSENT + the carrier has CAPACITY — [[FINDING-crystals-refresh-long-task-drift-2026-07-11]]).
+(deliver only where the rule is ABSENT + the carrier has CAPACITY — FINDING-crystals-refresh-long-task-drift-2026-07-11).
 
 Binding fields (frontmatter `crystal:` block):
   deliver : boot | inject | rag | serve | bytes   which channel carries it
@@ -215,7 +215,7 @@ def for_channel(crystals, channel, who=None):
 # ---- ACT BINDING (2026-07-20) -----------------------------------------------------------------
 # THE PROBLEM THIS SOLVES: `deliver: rag` selects by TOKEN OVERLAP between your prompt and the
 # crystal's essence. That is PULL-shaped — it can only surface what you were already thinking
-# about ([[topic-retrieval-cannot-deliver-the-unthought]]: 13 deliveries to the session that
+# about (topic-retrieval-cannot-deliver-the-unthought: 13 deliveries to the session that
 # already knew, 0 to the session that needed it). And with one slot, 66 crystals competed and 50
 # never won.
 #
@@ -230,7 +230,7 @@ def for_channel(crystals, channel, who=None):
 #     on: commit,write    # or several
 #
 # `_parse_binding` already accepts arbitrary keys, so `on:` needed NO parser change.
-# `delegate` added 2026-08-02: PreToolUse on Task/Agent — you are about to BRIEF A SUBAGENT. Tom named
+# `delegate` added 2026-08-02: PreToolUse on Task/Agent — you are about to BRIEF A SUBAGENT. the maintainer named
 # the gap ("the 165k burn on waiting is a major waste") and the audit confirmed it structurally: NO hook
 # in settings.json matched Task or Agent, so the single most expensive decision a session makes — 12 lanes
 # at 100k-320k tokens each — was the one act the whole nervous system could not see. subagent-nudge.py says

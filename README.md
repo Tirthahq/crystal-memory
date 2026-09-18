@@ -38,6 +38,7 @@ crystal:
   deliver: act              # push it, do not wait to be asked
   on: bash                  # the action it belongs to
   match: "| tail, |tail, | head, |head, | grep, |grep, ssh , ssm"
+  who: all                  # audience tag; `all` reaches every reader
 ---
 
 <!-- crystal:essence -->
@@ -65,7 +66,7 @@ That is the entire idea. The rest of this page is what we learned running it.
 
 - **Claude Code**, because delivery uses its hooks. The notes themselves are plain markdown and portable; the push mechanism is Claude Code specific today.
 - **Python 3**, standard library only. No packages to install, no service, no account, no network calls.
-- **A git repo** to put it in. It writes to two directories inside that repo and nowhere else.
+- **A git repo** to put it in. The install adds `scripts/`, `memory/` and `scratch/`; only `memory/` and `scratch/` are ever written to after that, and nothing outside your repo is touched.
 
 ## Try it without installing anything
 
@@ -87,8 +88,12 @@ Every team has a set of knowings that live in someone's head, a stale wiki, or a
 nobody re-reads. In almost every case the rule WAS written down. It was written down somewhere the reader is not, at a
 moment they are not thinking about it.
 
-We ran this on our own repo for four months and measured it. Three things we learned that are worth
-your time before you decide:
+We ran this on our own repo for four months and measured it. ⚠ **These three numbers are ours, from
+our own corpus, and you cannot reproduce them from this repo** — they are here because they are the
+reasons the design looks the way it does, not as claims about your codebase. The full write-ups, with
+method and caveats, are linked at the bottom.
+
+Three things we learned that are worth your time before you decide:
 
 - **A knowing can be delivered on the exact call it was written for and change nothing.** Ours fired on
   the precise command it was written to prevent, and the mistake happened anyway, because the channel
@@ -111,7 +116,7 @@ If your rules are already enforced by CI and linters, you probably do not need i
 
 | | |
 |---|---|
-| `starter/` | three portable crystals, so your store is not empty on day one |
+| `starter/` | three portable crystals, which the seeder copies into your repo as `memory/crystals/*.md` |
 | `INSTALL.md` | the install, every command in it run verbatim under `dash` before shipping |
 | five scripts | `crystal_act.py`, `crystal_registry.py`, `crystallize-stop-hook.py`, `crystal_inject.py`, `crystal_starter.py` |
 
@@ -149,6 +154,24 @@ say it, we want to know exactly which screen you were looking at.
 
 Second most useful: a crystal of yours that fired when it should not have. Third: one that should have
 fired and did not.
+
+---
+
+## Where this came from, and the numbers
+
+Built and run by [Spanda Works](https://github.com/tjonesit), a one-person shop, inside a working
+product repo. It exists because we kept making the same three or four classes of mistake and wanted
+something that interrupted the fourth time rather than the fortieth.
+
+The three write-ups below carry the method and the caveats behind every number on this page, including
+the ones that went against us:
+
+1. [Crystal memory: notes that arrive when you act, not when you go looking](https://dev.to/tom_jones_230c4659491adcd/crystal-memory-notes-that-arrive-when-you-act-not-when-you-go-looking-83) — the delivery mechanism, and a placebo-controlled test of whether it changes behaviour at all.
+2. [Whole notes, not fragments](https://dev.to/tom_jones_230c4659491adcd/whole-notes-not-fragments-the-retrieval-half-58ni) — the retrieval half, and why the number that flatters us is the one you cannot re-run.
+3. [Your hooks are a fence. They could be a body.](https://dev.to/tom_jones_230c4659491adcd/your-hooks-are-a-fence-they-could-be-a-body-966) — what it is like to work inside it, and the evening the agent went numb to its own alerts.
+
+⚠ **Every measurement we have comes from one repo, one team and one corpus.** That is the limit we
+most want help with, and it is why this is published at all.
 
 ---
 

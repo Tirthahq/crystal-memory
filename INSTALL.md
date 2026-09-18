@@ -1,17 +1,38 @@
 # Crystals: a 5 minute install
 
-A crystal is a short knowing bound to an **act** rather than to a topic. When you are about to run a
-command, write a file or make a commit, the ones that match arrive in your agent's context at that
-moment. No retrieval query, no chat, no service.
+A crystal is a short knowing bound to an **act** rather than to a topic. When your coding agent is
+about to run a command, write a file or make a commit, the ones that match arrive in its context at
+that moment. No retrieval query, no chat, no service.
 
-This install is stdlib Python and four files. It talks to nothing on the network, and it never blocks
-anything you do.
+**This installs into a repo you already have, and delivery is wired through [Claude Code](https://claude.com/claude-code) hooks.** The notes themselves are plain markdown and portable;
+the push mechanism is Claude Code specific today. Everything here is standard-library Python 3. It
+talks to nothing on the network, and it never blocks anything you do.
+
+New here? Read the [README](README.md) first for what this is and a worked example.
+
+**Requirements:** Python 3.8 or newer, standard library only. macOS or Linux; the commands below are
+POSIX shell and are verified under `dash`. Windows is untested and the shell loops here will need
+translating.
+
+## First, get a copy
+
+Every command below assumes you have cloned this repo somewhere. Adjust `~/src` to taste.
+
+```sh
+git clone https://github.com/tjonesit/crystal-memory ~/src/crystal-memory
+export CRYSTALS=~/src/crystal-memory      # used by the commands below
+```
+
+Then `cd` into **your own repo**, the one you want the crystals in.
 
 ---
 
 ## What you are installing
 
 Four scripts, three directories, and a starter set of three crystals so the loop is visible on day one.
+
+A fifth script, `crystal_starter.py`, seeds that set and runs the selftest. You run it **from the
+clone** and it is not copied into your repo, which is why the tree below shows four.
 
 ```
 your-repo/
@@ -22,6 +43,17 @@ your-repo/
 
 `memory/` and `scratch/` are the only places anything is written. Nothing is written outside your repo.
 
+**Two of those four scripts are optional channels, and neither is wired by this install.** Copy them
+now and ignore them until you want them:
+
+- `crystal_inject.py` — the *inject* channel. Re-delivers a small number of standing notes mid-session,
+  on a cadence, because a rule drifts over long work. Wire it to a periodic hook when you want it.
+- `crystallize-stop-hook.py` — a `Stop` hook that notices a substantial session which banked nothing
+  new, and offers a ready-to-fill template once. It never writes anything and never decides what is
+  worth keeping.
+
+The act-bound channel described in this document needs only `crystal_act.py` and `crystal_registry.py`.
+
 ---
 
 ## Install
@@ -31,7 +63,7 @@ your-repo/
 ```sh
 mkdir -p scripts memory scratch
 for f in crystal_act.py crystal_registry.py crystallize-stop-hook.py crystal_inject.py; do
-  cp /path/to/crystals/scripts/$f scripts/
+  cp "$CRYSTALS/scripts/$f" scripts/
 done
 ```
 
@@ -55,7 +87,7 @@ first thing this tool does is refuse.
 **3. Seed the starter set.**
 
 ```sh
-python3 /path/to/crystals/scripts/crystal_starter.py seed --into .
+python3 "$CRYSTALS/scripts/crystal_starter.py" seed --into .
 ```
 
 ```
@@ -128,7 +160,7 @@ The output of `crystal_act.py` is `PreToolUse` hook JSON. In Claude Code, add th
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|Edit",
+        "matcher": "Bash|Write|Edit|NotebookEdit|Task",
         "hooks": [
           {
             "type": "command",
@@ -140,6 +172,10 @@ The output of `crystal_act.py` is `PreToolUse` hook JSON. In Claude Code, add th
   }
 }
 ```
+
+If `.claude/settings.json` does not exist yet, create it with exactly the block above; the directory
+is `.claude/` at the root of your repo. The matcher list is what decides which acts can reach you:
+drop `NotebookEdit` and notebook edits stop delivering, drop `Task` and the `delegate` act never fires.
 
 The hook invokes the script with **no arguments**. Claude Code sends the tool call as JSON on stdin,
 and the script reads the act and context from that payload. The project path is quoted so spaces in
@@ -177,8 +213,27 @@ who is about to make the mistake it prevents.
 <!-- /crystal:essence -->
 ```
 
-- **`on:`** is the acts it binds to (`bash`, `write`, `commit`).
+- **`on:`** is the acts it binds to. **These are the only acts a Claude Code hook can produce**, so
+  binding to anything else gives you a crystal that can never fire:
+
+  | `on:` | fires when |
+  |---|---|
+  | `bash` | the agent runs a shell command (`git commit ...` is a **bash** act, not a `commit` act) |
+  | `write` | the agent writes or edits a file (`Write`, `Edit`, `NotebookEdit`) |
+  | `delegate` | the agent briefs a subagent (`Task`/`Agent`) |
+  | `boot` | session start |
+  | `prompt` | you submit a prompt |
 - **`match:`** is a comma-separated list; any one matching the context selects the crystal.
+- **On a long write, `match:` is tested against the SUBJECT, not the whole body.** Under 2,000
+  characters the whole payload is the subject. Above that, only the file path plus the first 600
+  characters (title, frontmatter, lede) are searched. This exists because substring matching over a
+  long document accumulates accidental hits: on a 7,638-character file we measured 2 crystals
+  matching by path against 39 by body text, so relevance fell as the writing got more substantial.
+  Short acts, every shell command among them, are unaffected.
+- **`who:`** is the audience tag. `who: all` reaches every reader and is what you want unless you are
+  routing notes to different model tiers. A reader identifies itself with `CRYSTAL_WHO` (default
+  `frontier`), which is why `doctor` prints `who='frontier'`. A crystal whose `who:` matches neither
+  `all` nor the reader's tag is silently skipped.
 - The **essence markers are load-bearing.** A crystal with a `crystal:` block and no markers loads,
   lists, and delivers nothing. `doctor` reports it as `MISSING MARKERS` and exits `2`.
 
@@ -210,13 +265,28 @@ Three properties worth knowing before you write many:
 ## Prove the whole thing on a throwaway repo
 
 ```sh
-python3 /path/to/crystals/scripts/crystal_starter.py selftest
+python3 "$CRYSTALS/scripts/crystal_starter.py" selftest
 ```
 
 It builds a clean foreign repo in a temp directory, seeds the set, and asserts the arms that matter:
 the empty store is unhealthy, each crystal registers, the store stays silent on an unrelated command,
 each starter crystal fires on its own trigger, re-seeding is non-destructive, and a crystal stripped of
 its essence marker turns doctor red. That last one is the control: it proves the checks can fail.
+
+---
+
+## Uninstall
+
+Remove the hook entry from `.claude/settings.json`, and delivery stops immediately. Nothing else runs.
+
+```sh
+rm scripts/crystal_act.py scripts/crystal_registry.py \
+   scripts/crystallize-stop-hook.py scripts/crystal_inject.py
+rm -rf scratch/.act-ledger.json scratch/.inject-ledger.json
+```
+
+Your crystals are your own markdown under `memory/`. Deleting the scripts leaves them untouched, and
+nothing outside your repo was ever written.
 
 ---
 

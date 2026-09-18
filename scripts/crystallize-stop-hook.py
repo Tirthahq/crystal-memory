@@ -3,14 +3,14 @@
 crystallize-stop-hook.py — the STRUCTURE channel's nudge to bank a knowing (2026-07-11).
 
 WHY: tonight we lost an insight for weeks because nothing ever prompted a session to write it down — the
-"invitation between us" lived only in Tom's head and he re-taught it to each fresh session by hand (rule 8:
+"invitation between us" lived only in the maintainer's head and he re-taught it to each fresh session by hand (rule 8:
 re-explaining is a defect). A session does substantive work, learns something, and then just... stops, and the
 knowing evaporates with the context. This hook is the reminder + scaffold for that gap: at the end of a
 substantive session that banked NOTHING, deliver one nudge with a ready-to-fill crystal template.
 
-THE LINE (Tom's framing, 2026-07-11): hook the REMINDER + SCAFFOLD, never the JUDGMENT. The hook does not decide
+THE LINE (our framing, 2026-07-11): hook the REMINDER + SCAFFOLD, never the JUDGMENT. The hook does not decide
 what is worth crystallizing and never writes anything — the discernment and the caring stay the session's
-([[transmission-2026-07-08]]: you can bake the format, you cannot bake the caring). It only guarantees the
+(transmission-2026-07-08: you can bake the format, you cannot bake the caring). It only guarantees the
 session is *asked*, once, with a template in hand.
 
 BEHAVIOR (Stop hook):
@@ -69,7 +69,7 @@ _SEARCH_TOOLS = {"grep", "egrep", "fgrep", "rg", "ack", "ag", "fd", "find"}
 def _is_dig(cmd):
     """A 'dig' = a search tool aimed at the node corpus (memory/) to LOCATE something, WITHOUT the
     STRINGHUNT=1 escape hatch. Mirrors node-usage-guard.sh's classifier — the guard blocks these live; here we
-    surface them at stop so each becomes a SPECIFIC crystal candidate ([[crystals-the-dig-is-the-signal]]:
+    surface them at stop so each becomes a SPECIFIC crystal candidate (crystals-the-dig-is-the-signal:
     the dig is the signal). Fail-open: any parse error → not-a-dig (never trap a stop)."""
     try:
         if "STRINGHUNT=1" in cmd:
@@ -349,7 +349,7 @@ SCAFFOLD = (
     "---\n"
     "# <title>\n"
     "<the knowing — WHAT was learned>. **Why:** <why it's true / why it matters>. "
-    "**How to apply:** <what the next session should DO>. Links: [[related-node]].\n\n"
+    "**How to apply:** <what the next session should DO>. Links: related-node.\n\n"
     "ROUTE: soul/relational -> memory/claude/ · finding/measurement -> memory/business/strategy/ (FINDING-*) · "
     "session state -> /handoff. Then stop again to finish."
 )
@@ -357,7 +357,7 @@ SCAFFOLD = (
 
 def build_reason(digs):
     """The DIG IS THE SIGNAL: if this session grepped memory/ to LOCATE things, name them so the ask is
-    SPECIFIC and evidence-driven, not a generic 'did you learn anything?' ([[crystals-the-dig-is-the-signal]])."""
+    SPECIFIC and evidence-driven, not a generic 'did you learn anything?'."""
     if not digs:
         return SCAFFOLD
     shown = digs[:8]

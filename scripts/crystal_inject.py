@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-crystal_inject.py — the INJECT channel of from-within crystal deployment ([[SPEC-crystal-from-within-deployment-2026-07-11]]).
+crystal_inject.py — the INJECT channel of from-within crystal deployment.
 
 Boot delivers crystals at session start; INJECT delivers them MID-RUN via the nervous system (SPEAK), because a
 rule drifts over long work and the refresh is what catches it (the drift-map's "refresh caught me over the 18h

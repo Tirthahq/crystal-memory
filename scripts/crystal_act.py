@@ -5,7 +5,7 @@ crystal_act.py — the ACT dispatcher. Delivers crystals because you are DOING T
 WHY THIS EXISTS (measured 2026-07-20). The store had two failure modes that were one bug:
   · 66 of 82 crystals sat on `deliver: rag`, which ranks by TOKEN OVERLAP and keeps ONE winner
     per prompt → a few broad-topic crystals won every time and 50 had NEVER been delivered.
-  · rag is PULL-shaped, and [[topic-retrieval-cannot-deliver-the-unthought]] measured what that
+  · rag is PULL-shaped, and topic-retrieval-cannot-deliver-the-unthought measured what that
     costs: 13 deliveries to the session that already knew, 0 to the session that needed it.
 Meanwhile everything that actually CAUGHT something that day — the discriminator gate, the
 Librarian, the duplicate-node catch — was BOUND TO AN ACT and never touched the ranking at all.
@@ -63,7 +63,7 @@ CLAIM_BINDING_ESSENCE = (
     "CLAIM-SHAPED WRITE: pause before this strategy/positioning claim hardens. "
     "Ask: (1) What would FALSIFY this? "
     "(2) Does an existing vision/positioning node already claim something DIFFERENT? "
-    "Check [[VISION-what-we-are-building]]: the extender is the DOOR, not the destination. "
+    "Check VISION-what-we-are-building: the extender is the DOOR, not the destination. "
     "(3) Have you briefed this leg to an adversary, or only the legs you like? "
     "Name the legs you did NOT brief."
 )
@@ -213,7 +213,7 @@ def candidates(act, ctx="", target="", who=None, repo=None, crystals=None):
     """Everything act-bound + who-admitted + essence-bearing + `match`-satisfied for this act.
 
     The set that SHOULD be considered, before any budget is applied. Split out of due_for so the
-    audit can replay it without touching the ledger ([[crystal-selftest-green-is-not-correct]] — the
+    audit can replay it without touching the ledger (crystal-selftest-green-is-not-correct — the
     instrument must ask the delivery path, not model it; that divergence is exactly what let three
     crystals read as healthy while being unroutable, 2026-08-02).
     """
@@ -294,8 +294,7 @@ def pack(cands, budget=None):
     + matcher + selftest): 8 matched, 11,559 chars — break delivered **3**, using only **1807 of the
     4000-char budget**. It was not merely unfair, it left 55% of the budget unspent. Skipping instead
     of breaking delivers 5 for 3568 chars, and the 3 it still cannot fit come back first next act
-    (see `order`). The budget stays 4000 on purpose: it is the wallpaper guard
-    ([[crystal-inject-budget-discipline]]), and a fix that delivered all 8 every time would be the
+    (see `order`). The budget stays 4000 on purpose: it is the wallpaper guard, and a fix that delivered all 8 every time would be the
     regression, not the win.
     """
     budget = CHARS_BUDGET if budget is None else budget
@@ -337,7 +336,7 @@ def due_for(act, session, now=None, repo=None, dry=False, ctx="", target="", max
     Load-bearing — verified 2026-07-21 that the old `--dry` path bumped the ledger like a real
     delivery, so checking a new crystal three times burned its whole 3-per-session budget and it
     then reported as not-firing. A verification tool that mutates the state it reports on will make
-    correct work look broken. ([[crystal-selftest-green-is-not-correct]] — verify the instrument.)
+    correct work look broken. (crystal-selftest-green-is-not-correct — verify the instrument.)
     """
     now = time.time() if now is None else now
     led = _load()
