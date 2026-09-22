@@ -8,7 +8,18 @@
 
 **Your coding agent keeps making the same mistake. You already wrote the rule down. It is in a file the agent does not read at the moment it matters.**
 
-Crystals is a small memory layer for [Claude Code](https://claude.com/claude-code). You write a note once, you say which *action* it belongs to, and from then on it appears in the agent's context in the second before it takes that action. Nobody searches for it. Nobody has to remember it exists.
+The note is not missing. Reaching it requires someone to decide to go looking, and **you cannot look up the mistake you do not know you are about to make**: forming the query means already suspecting the answer.
+
+Crystals is a small memory layer for [Claude Code](https://claude.com/claude-code), in two halves. Neither half waits to be searched.
+
+| | holds | arrives |
+|---|---|---|
+| **The scratchpad** | what you were in the middle of: the open threads, the hunch not yet proven, the thing deliberately left undone and the reason it was left | at session start, before the first question |
+| **Crystals** | one finished knowing each: what was learned, and what it cost to learn it | in the second before the action it applies to |
+
+**The scratchpad carries your reasoning across a context reset. A crystal arrives before the mistake.**
+
+Nobody searches. Nobody has to remember either of them exists. That is the whole design, and everything below is how it is done and where it is still weak.
 
 They are called crystals because each one is a single knowing, compressed until it fits in the small space you get at the moment of an action, and then left alone.
 
