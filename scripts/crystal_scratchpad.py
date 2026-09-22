@@ -55,6 +55,21 @@ TEMPLATE = """# Scratchpad — working memory, not governed truth
 """
 
 
+
+def _redacted(text):
+    """Strip credential-shaped strings before the pad reaches a model's context.
+
+    ⛔ The pad is delivered VERBATIM at every boot, so a secret pasted into it once travels on every
+    future session until somebody notices. A commit gate cannot help: the pad is read from disk as it
+    is now, committed or not. Fails OPEN on any error, because a redactor that crashes the delivery
+    would silence the channel it exists to protect.
+    """
+    try:
+        import redact
+        return redact.redact(text)
+    except Exception:
+        return text
+
 def path(repo=None):
     return os.path.join(repo or REPO, SCRATCHPAD)
 
@@ -126,7 +141,7 @@ def main():
     if a.boot or True:
         if text:
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
-                                                     "additionalContext": text}}))
+                                                     "additionalContext": _redacted(text)}}))
         return 0
 
 

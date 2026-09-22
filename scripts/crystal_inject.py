@@ -36,6 +36,20 @@ TIER_TTL_MIN = {"critical": 2.0, "steering": 5.0, "ambient": 30.0}  # default ca
 MAX_PER_SESSION = 3          # after this, silence for the rest of the session
 BACKOFF_BASE = 2.0           # nth repeat needs ttl * BACKOFF_BASE**n minutes
 
+
+def _redacted(text):
+    """Strip credential-shaped strings before this leaves for a model's context.
+
+    A commit gate cannot cover a delivery: the text is read from the store as it is now, committed or
+    not, and in an install it is YOUR store rather than ours. Fails OPEN on any error, because a
+    redactor that crashes the delivery would silence the channel it exists to protect.
+    """
+    try:
+        import redact
+        return redact.redact(text)
+    except Exception:
+        return text
+
 def _session_id():
     """Hook mode: Claude Code sends {"session_id": ...} on stdin (same contract session-vitals.py
     uses). Falls back to a per-boot marker so dedupe still works if the payload is absent — a wrong
@@ -123,7 +137,7 @@ def main():
                if k.startswith("crystal-inject-session:") or now - t < 86400}
         _save(led)
         event = os.environ.get("CRYSTAL_INJECT_EVENT", "PreToolUse")
-        print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": "\n".join(parts)}}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": _redacted("\n".join(parts))}}))
         return 0
     except Exception:
         return 0  # SPEAK must never break the turn

@@ -86,6 +86,20 @@ _FALSIFIER_SECTION_RE = re.compile(
 )
 
 
+
+def _redacted(text):
+    """Strip credential-shaped strings before this leaves for a model's context.
+
+    A commit gate cannot cover a delivery: the text is read from the store as it is now, committed or
+    not, and in an install it is YOUR store rather than ours. Fails OPEN on any error, because a
+    redactor that crashes the delivery would silence the channel it exists to protect.
+    """
+    try:
+        import redact
+        return redact.redact(text)
+    except Exception:
+        return text
+
 def is_claim_shaped_write(ctx, target=""):
     """Return True when a Write/Edit is the nearest act to a strategic claim forming.
 
@@ -575,7 +589,7 @@ def main():
             pass
         return 0
     print(json.dumps({"hookSpecificOutput": {"hookEventName": ev,
-                                             "additionalContext": header + "\n" + body}}))
+                                             "additionalContext": _redacted(header + "\n" + body)}}))
     try:
         import crystal_registry as cr
         for c, _p in due:

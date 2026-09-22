@@ -36,7 +36,7 @@ clone** and it is not copied into your repo, which is why the tree below shows f
 
 ```
 your-repo/
-  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal-discriminators.py  librarian.py node-cleaner.py soul-gardener.py node-corrector.py store_contract.py build-node-index.py memory-hygiene.py store_caps.py node-health.py store_policy.py install_layout.py
+  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal-discriminators.py  librarian.py node-cleaner.py soul-gardener.py node-corrector.py store_contract.py build-node-index.py memory-hygiene.py store_caps.py node-health.py store_policy.py install_layout.py  redact.py
   memory/        your crystals live here, as .md files, at any depth
   scratch/       the delivery ledger (backoff + per-session counts)
 ```
