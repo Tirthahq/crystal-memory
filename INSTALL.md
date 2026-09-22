@@ -51,7 +51,7 @@ clone** and it is not copied into your repo, which is why the tree below shows f
 
 ```
 your-repo/
-  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal-discriminators.py  librarian.py node-cleaner.py soul-gardener.py node-corrector.py store_contract.py build-node-index.py memory-hygiene.py store_caps.py node-health.py store_policy.py install_layout.py  redact.py
+  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal_handoff.py  crystal-discriminators.py  librarian.py node-cleaner.py soul-gardener.py node-corrector.py store_contract.py build-node-index.py memory-hygiene.py store_caps.py node-health.py store_policy.py install_layout.py  redact.py
   memory/        your crystals live here, as .md files, at any depth
   scratch/       the delivery ledger (backoff + per-session counts)
 ```
@@ -99,12 +99,12 @@ The act-bound channel described in this document needs only `crystal_act.py` and
 
 ## Install
 
-**1. Make the layout and copy the six scripts.**
+**1. Make the layout and copy the scripts.**
 
 ```sh
 mkdir -p scripts memory scratch
 for f in crystal_act.py crystal_registry.py crystallize-stop-hook.py crystal_inject.py \
-         crystal_scratchpad.py crystal-discriminators.py; do
+         crystal_scratchpad.py crystal_handoff.py crystal-discriminators.py; do
   cp "$CRYSTALS/scripts/$f" scripts/
 done
 ```
@@ -156,7 +156,9 @@ you have the capability.
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command",
-                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_scratchpad.py\" --boot" } ] }
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_scratchpad.py\" --boot" },
+                   { "type": "command",
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_handoff.py\" --boot" } ] }
     ]
   }
 }
@@ -167,6 +169,37 @@ that speaks when it has nothing teaches you to skip it. It delivers the newest ~
 many it withheld, and warns you when the file wants folding. Newest goes at the TOP: ours once ran 503
 lines against a 500-line budget, and because the convention was to append at the bottom, everything
 carefully preserved sat in the one region a truncated reader never reaches.
+
+**3b. The handoff, which is what survives a context reset.**
+
+The scratchpad above and the loop cover two spans. This covers the third, and the three are worth
+seeing side by side, because each one fails in a way the others cannot catch:
+
+| span | file | what it carries |
+|---|---|---|
+| the act | `crystal_act.py` | a knowing, at the second of the command it belongs to |
+| the session | `crystal_scratchpad.py` | live working memory, so a boot is not a cold start |
+| the reset | `crystal_handoff.py` | what the session **was**, written once at the end |
+
+A scratchpad is open and unfinished by design. A handoff is closed: what shipped, what was decided,
+what did not work, what is next. Without one the next session rebuilds your situation from commits
+and files, recovers the facts, loses the reasoning, and the cost lands on **you** as re-explaining
+your own project to your own agent.
+
+```sh
+python3 "$CRYSTALS/scripts/crystal_handoff.py" --new
+```
+
+⛔ **The machine fills only what it can prove.** The "what shipped" table is generated from `git log`,
+with real hashes, so it cannot contain a claim with no commit behind it — which is the most common
+lie in a handoff and the most expensive, because the next session believes it. Everything requiring
+judgement (why it matters, what did not work, what is blocked and on whom) is left as a visible
+prompt and stays unanswered until somebody answers it.
+
+⚠ **An unanswered skeleton is SILENT at boot.** A document whose every section is still a prompt must
+not announce itself, or you learn to skip the channel. And the boot delivery is deliberately narrow —
+the pointer, the next action, what is blocked — never the whole document, because the scratchpad
+already speaks on that channel and a second one that dumps a page starves the first.
 
 **4. Seed the starter set.**
 

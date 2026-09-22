@@ -45,7 +45,8 @@ mkdir -p scripts memory scratch
 copied=0
 skipped=0
 for f in crystal_act.py crystal_registry.py crystallize-stop-hook.py crystal_inject.py \
-         crystal_starter.py crystal_scratchpad.py crystal-discriminators.py redact.py; do
+         crystal_starter.py crystal_scratchpad.py crystal_handoff.py \
+         crystal-discriminators.py redact.py; do
   if [ ! -f "$SRC/scripts/$f" ]; then
     echo "  MISSING in package: $f" >&2
     exit 2
@@ -112,7 +113,9 @@ In .claude/settings.json:
       "PreToolUse":   [ { "hooks": [ { "type": "command",
         "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_act.py\" --hook" } ] } ],
       "SessionStart": [ { "hooks": [ { "type": "command",
-        "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_scratchpad.py\" --boot" } ] } ],
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_scratchpad.py\" --boot" },
+                                     { "type": "command",
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_handoff.py\" --boot" } ] } ],
       "Stop":         [ { "hooks": [ { "type": "command",
         "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystallize-stop-hook.py\"" } ] } ]
     }
@@ -120,6 +123,7 @@ In .claude/settings.json:
 
 PreToolUse is the loop: a note arrives in the second before the action it belongs to.
 SessionStart is the scratchpad: what you were in the middle of, handed back at boot.
+It also delivers the last handoff's next action, and stays silent until one is written.
 Stop is the capture reminder: it offers a template when a session banked nothing.
 
 See one fire again any time, without waiting for a real mistake:

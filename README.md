@@ -172,7 +172,7 @@ If your rules are already enforced by CI and linters, you probably do not need i
 |---|---|
 | `starter/` | three portable crystals, which the seeder copies into your repo as `memory/crystals/*.md` |
 | `INSTALL.md` | the install, every command in it run verbatim under `dash` before shipping |
-| the loop | `crystal_act.py`, `crystal_registry.py`, `crystallize-stop-hook.py`, `crystal_inject.py`, `crystal_starter.py`, `crystal_scratchpad.py`, `crystal-discriminators.py` |
+| the loop | `crystal_act.py`, `crystal_registry.py`, `crystallize-stop-hook.py`, `crystal_inject.py`, `crystal_starter.py`, `crystal_scratchpad.py`, `crystal_handoff.py`, `crystal-discriminators.py` |
 | the maintenance layer, optional | four agents that tend the store rather than use it, plus the helpers they load. See below, and §"The maintenance layer" in `INSTALL.md`. |
 
 **The delivery path is stdlib Python with no process launching.** Importing it pulls two modules,
