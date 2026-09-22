@@ -36,7 +36,7 @@ clone** and it is not copied into your repo, which is why the tree below shows f
 
 ```
 your-repo/
-  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal-discriminators.py
+  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal-discriminators.py  librarian.py node-cleaner.py soul-gardener.py node-corrector.py store_contract.py build-node-index.py memory-hygiene.py store_caps.py node-health.py store_policy.py install_layout.py
   memory/        your crystals live here, as .md files, at any depth
   scratch/       the delivery ledger (backoff + per-session counts)
 ```
@@ -330,3 +330,52 @@ nothing outside your repo was ever written.
   apply.
 - **Not networked.** Importing `crystal_act` pulls two modules, neither of them outside the standard
   library, and none of `subprocess`, `socket`, `ssl`, `urllib`, `http` or `asyncio`.
+
+---
+
+## The maintenance layer (optional)
+
+Four agents that tend the store rather than use it. They are **optional**: the crystal loop works
+without them, and nothing above depends on them.
+
+| agent | what it does | on a brand-new store |
+|---|---|---|
+| `librarian.py status` | reports dangling links, broken paths, stale stamps | runs; reports on what you have |
+| `node-cleaner.py` | consolidates over-cap folders (`--apply` to act; default is a plan) | runs; says "Nothing to do" |
+| `node-corrector.py` | proposes fixes for moved files (`--apply` for the confident ones) | runs; writes an empty board |
+| `soul-gardener.py` | grows the store from how you actually search it | **refuses** until it has usage data |
+
+The Gardener's refusal is the honest answer, not a bug: it mines your own transcripts, and a store
+installed today has none. It is listed here so the refusal is expected rather than alarming.
+
+⚠ `node-cleaner.py --apply` and `node-corrector.py --apply` MOVE AND REWRITE FILES. Both default to a
+plan that changes nothing. Read the plan first. Both are bounded by the directories declared above and
+never by a recursive walk of your repo.
+
+### `.store-policy.json` (optional, in your repo root)
+
+Your install's exceptions. **There is no default file and not having one is the normal case** — with no
+policy nothing is excluded, no folder has a raised cap, and nothing is retention-managed.
+
+```json
+{
+  "excluded_dirs":     ["_archive"],
+  "archived_dirs":     ["_archive"],
+  "cap_raised":        {"memory/notes": {"cap": 80, "since": "2026-01-01",
+                                         "review_by": "2026-04-01", "reason": "why, in your words"}},
+  "retention_managed": {"memory/logs": "scripts/your-retention-tool.py"}
+}
+```
+
+`excluded_dirs` are path fragments the scanners skip. `archived_dirs` are not scanned but still count as
+existing link targets. A raised cap must carry a date and a reason and it expires at `review_by`, so a
+silently raised cap is not reachable. `retention_managed` names the script that bounds a folder instead
+of a count.
+
+A **missing** file is fine. A **malformed** one is refused rather than read as empty, because a policy
+that silently reads as empty would drop an exclusion or a cap raise with nothing to show for it. Unknown
+keys are refused too (a typo must not read as empty); `version`, `comment` and `_comment` are ignored so
+you can annotate it.
+
+`STORE_POLICY_FILE` points at one elsewhere. If you set it and the file is absent, that IS an error —
+you asked for a specific file.
