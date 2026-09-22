@@ -202,6 +202,22 @@ def _infer_act(payload):
 
 def matches_ctx(c, ctx_l):
     """Does this crystal's `match:` comma-list admit this act's text? No `match:` ⇒ always."""
+    # DEPENDENCY GATING. `match:` is a broad OR-list, so a note about ONE resource fires on acts about
+    # any other. Measured on our own store: a note about one server fired identically for that server's
+    # id and for a completely different one, because the match list also contained the project name.
+    # `depends_on:` is an AND on top — the act must actually NAME this note's resource.
+    #   depends_on: i-0123456789abcdef0, vol-0fedcba9876543210
+    # ⚠ It gates ONLY when the act names a COMPETING resource of the same shape. Gating bluntly also
+    # silenced a GENERIC mention of the project, and that is exactly when such a note most needs to
+    # fire — a worse failure than the noise it fixed. An act naming no resource at all falls through
+    # to `match:` unchanged, so recall is preserved and only the wrong-resource case is removed.
+    dep = (c.get("depends_on") or "").strip().lower()
+    if dep:
+        ids = [d.strip() for d in dep.split(",") if d.strip()]
+        if ids and not any(d in ctx_l for d in ids):
+            prefixes = {d.split("-", 1)[0] + "-" for d in ids if "-" in d}
+            if any(re.search(r"\b" + re.escape(pre) + r"[0-9a-z]{6,}", ctx_l) for pre in prefixes):
+                return False
     mp = (c.get("match") or "").strip().lower()
     if not mp:
         return True
@@ -224,7 +240,12 @@ def candidates(act, ctx="", target="", who=None, repo=None, crystals=None):
     if act == "write":
         cands = _claim_shaped_binding(ctx, target) + cands
     ctx_l = (ctx or "").lower()
-    return [c for c in cands if (c.get("essence") or "").strip() and matches_ctx(c, ctx_l)]
+    live = [c for c in cands if (c.get("essence") or "").strip() and matches_ctx(c, ctx_l)]
+    # Staleness is applied HERE, at the one function every caller shares, so a report and the live
+    # hook can never disagree about what is expired. An expired crystal keeps its slot and delivers a
+    # stub instead of its text: it must not assert live state it can no longer vouch for, and it must
+    # not vanish either, or someone repeats it from memory.
+    return cr.apply_staleness(live, repo=repo)
 
 
 def order(cands, act, session, led=None, now=None):
@@ -352,6 +373,12 @@ def due_for(act, session, now=None, repo=None, dry=False, ctx="", target="", max
         base = os.path.basename(c.get("path", ""))
         seen = led.get(f"act-session:{session}:{act}:{base}", 0)
         if seen >= MAX_PER_SESSION:
+            continue
+        # An EXPIRED crystal is announced once per session, then goes quiet. The stub still bumps the
+        # session counter below, so without this it rotates like a live note and keeps taking a slot
+        # and ~700 chars of a bounded budget for a payload that carries no knowing, only a pointer.
+        # Enough expired notes and the withhold notices ARE the channel.
+        if c.get("expired") and seen >= 1:
             continue
         if now - led.get(f"act:{act}:{base}", 0) < BASE_MIN * (BACKOFF_BASE ** seen) * 60:
             continue

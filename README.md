@@ -26,6 +26,53 @@ So the difference is not smarter search. It is that **nobody has to decide to go
 
 The cost, and it is real: someone has to write the notes, one at a time, and mean them. There is no pipeline that generates these from your codebase. We tried that and it invented a statistic that appeared nowhere in the source. A note that arrives unasked, in the voice of settled fact, is dangerous in a way a search result is not, so a human writes every one.
 
+## A note that asserts live state needs a shelf life
+
+The README above says a note arriving unasked, in the voice of settled fact, is dangerous in a way a
+search result is not. That cuts both ways: **when such a note goes out of date, nothing tells you.** A
+stale document is dated and you can see it. A stale note is simply believed.
+
+We measured this hurting us twice — one said a feature was unbuilt when it had shipped a week earlier,
+and cost a decision that had already been made.
+
+So a note may carry two more keys:
+
+```yaml
+crystal:
+  stale_after: 2026-12-01
+  discriminator: test "$(the command that answers it)" != "the answer that would falsify this"
+```
+
+Past that date the text is **withheld** and you get a short stub naming the command instead. Never the
+old text. It is not dropped, because silence loses the pointer and you would repeat the claim from
+memory.
+
+**`discriminator` is the half that matters**, and it is worth saying why. A date is a prediction of an
+unscheduled event — if you could name the day the thing changes, you did not need the note. So
+`scripts/crystal-discriminators.py --run` executes those commands **offline, on whatever cadence you
+like**, and a claim its own check refuses is expired immediately, whatever its date says.
+
+⛔ **The contract: exit 0 while the claim HOLDS, non-zero when it is FALSIFIED.** This is not automatic
+and the first one we wrote got it wrong — a cloud CLI call printed one answer when our server was down
+and a different answer when it came back, and exited 0 both times. It would have read "still true"
+forever, including on the day it stopped being. Wrap the answer in a `test` so it can refuse.
+
+A passing check records evidence and **extends nothing**. Pushing the date forward automatically would
+let the store re-assert a claim no human looked at again, which is the whole problem one level up.
+
+## One note, one resource
+
+`match:` is an OR-list, so a note about one server fires on acts about any other. If a note is about a
+specific thing, name it:
+
+```yaml
+  depends_on: i-0123456789abcdef0, vol-0fedcba9876543210
+```
+
+The act must name that resource. It gates only when the act names a **competing** resource of the same
+shape — an act that names no resource at all still gets the note, because that is often exactly when a
+warning matters most.
+
 ## Show me
 
 Here is a real note from the starter set. The top half is bookkeeping. The `match:` line is the whole trick, and the text between the markers is the only part that ever gets delivered.

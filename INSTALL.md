@@ -29,14 +29,14 @@ Then `cd` into **your own repo**, the one you want the crystals in.
 
 ## What you are installing
 
-Four scripts, three directories, and a starter set of three crystals so the loop is visible on day one.
+Six scripts, three directories, and a starter set of three crystals so the loop is visible on day one.
 
 A fifth script, `crystal_starter.py`, seeds that set and runs the selftest. You run it **from the
 clone** and it is not copied into your repo, which is why the tree below shows four.
 
 ```
 your-repo/
-  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py
+  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal-discriminators.py
   memory/        your crystals live here, as .md files, at any depth
   scratch/       the delivery ledger (backoff + per-session counts)
 ```
@@ -58,11 +58,12 @@ The act-bound channel described in this document needs only `crystal_act.py` and
 
 ## Install
 
-**1. Make the layout and copy the four scripts.**
+**1. Make the layout and copy the six scripts.**
 
 ```sh
 mkdir -p scripts memory scratch
-for f in crystal_act.py crystal_registry.py crystallize-stop-hook.py crystal_inject.py; do
+for f in crystal_act.py crystal_registry.py crystallize-stop-hook.py crystal_inject.py \
+         crystal_scratchpad.py crystal-discriminators.py; do
   cp "$CRYSTALS/scripts/$f" scripts/
 done
 ```
@@ -84,7 +85,38 @@ per-crystal essence:
 If that came back green you would have no way to tell a working install from an empty one, so the
 first thing this tool does is refuse.
 
-**3. Seed the starter set.**
+**3. Seed the scratchpad, and wire it so it is actually read.**
+
+A crystal is a finished knowing. You do not arrive at one directly — you notice something half-formed
+mid-session and by the next session it is gone. The scratchpad is where that lives until it is worth
+crystallising.
+
+```sh
+python3 "$CRYSTALS/scripts/crystal_scratchpad.py" --seed
+```
+
+⛔ **A scratchpad nobody reads at boot is a diary, not a memory.** Wire the `SessionStart` hook or skip
+this step entirely — a file written and never delivered is worse than nothing, because it feels like
+you have the capability.
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command",
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_scratchpad.py\" --boot" } ] }
+    ]
+  }
+}
+```
+
+It stays **silent** when the scratchpad is empty or was seeded and never written in — a boot channel
+that speaks when it has nothing teaches you to skip it. It delivers the newest ~120 lines, says how
+many it withheld, and warns you when the file wants folding. Newest goes at the TOP: ours once ran 503
+lines against a 500-line budget, and because the convention was to append at the bottom, everything
+carefully preserved sat in the one region a truncated reader never reaches.
+
+**4. Seed the starter set.**
 
 ```sh
 python3 "$CRYSTALS/scripts/crystal_starter.py" seed --into .
@@ -100,7 +132,7 @@ seeded  memory/crystals/crystal-a-positive-control-cannot-detect-a-yes-machine.m
 Seeding never overwrites. Run it again and it writes nothing, so if you edit a starter crystal your
 edit survives a re-seed.
 
-**4. Check again.**
+**5. Check again.**
 
 ```sh
 python3 scripts/crystal_registry.py doctor

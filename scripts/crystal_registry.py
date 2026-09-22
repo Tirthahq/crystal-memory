@@ -22,6 +22,7 @@ USAGE
 Importable: `load_crystals(repo)` -> list[dict]; `for_channel(crystals, channel, who=None)`.
 """
 import os, sys, argparse, json, time
+import datetime as _dt
 from pathlib import Path
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -105,6 +106,13 @@ def invalid_bindings(crystals):
             why.append(f"who={c.get('who')!r} is not a reader")
         if c.get("deliver") == "act" and not str(c.get("on") or "").strip():
             why.append("deliver=act with no `on:` — registers cleanly and never fires")
+        # A malformed stale_after must be LOUD. Silently treating it as "no expiry" would restore the
+        # behaviour the key exists to remove, in the permissive direction, invisibly.
+        try:
+            stale_after(c)
+        except ValueError:
+            why.append(f"stale_after={c.get('stale_after')!r} is not YYYY-MM-DD — "
+                       "the claim is withheld until this parses")
         if why:
             bad.append((c.get("path"), "; ".join(why)))
     return bad
@@ -128,6 +136,129 @@ def _essence_marker_state(text):
     if not has_open and has_close:
         return "MISSING OPEN MARKER"
     return "EMPTY ESSENCE"
+
+# ─── STALENESS: a note that asserts LIVE STATE needs a shelf life ──────────────────────────────────
+# WHY. A crystal arrives unsourced and undated, in the voice of settled fact, at the moment of an
+# action. A stale DOCUMENT is inspectable and dated; a stale CRYSTAL is simply believed. We measured
+# this hurting us twice: a note said a feature was unbuilt when it had shipped a week earlier, and the
+# founder was asked to re-decide something already settled.
+#
+# It is DETERMINISTIC on purpose. In the agent-memory literature, embedding similarity is close to
+# useless at telling a CONTRADICTED fact from a DUPLICATE one (reported AUROC ~0.59), so this is a
+# date and a command — never a semantic guess.
+#
+#   stale_after   : YYYY-MM-DD  — the last day the claim stands.
+#   discriminator : the ONE command that settles whether it still holds.
+#
+# ⛔ THE DISCRIMINATOR CONTRACT: exit 0 while the claim HOLDS, non-zero when it is FALSIFIED.
+#    This is not automatic and the first one we wrote failed it — a cloud CLI call printed one answer
+#    when our box was down and another when it was back and exited 0 BOTH TIMES, so a runner keyed on
+#    the exit code would have read "claim holds" forever, including on the day it stopped being true.
+#    Wrap the answer in a `test`. A check that cannot fail is a check you do not have.
+
+
+def stale_after(c):
+    """Parsed `stale_after` as a date, or None. Raises ValueError on a malformed value.
+
+    ⛔ MALFORMED MUST NOT MEAN "NEVER EXPIRES" — that is the permissive direction, and a typo would
+    silently restore exactly the behaviour this key removes.
+    """
+    raw = (c.get("stale_after") or "").strip()
+    if not raw:
+        return None
+    return _dt.datetime.strptime(raw, "%Y-%m-%d").date()
+
+
+# Where the discriminator runner records its verdicts. Gitignored, per-machine, and it must NOT be
+# rotated or pruned on age: its whole value is that it is older than the claims it judges.
+DISC_RESULTS = os.path.join("scratch", "discriminator-runs.jsonl")
+_disc_cache = {"mtime": None, "verdicts": {}}
+
+
+def discriminator_refused(c, repo=None):
+    """True when this crystal's own discriminator last exited non-zero.
+
+    This is the half that OBSERVES THE WORLD. `stale_after` only schedules when you stop asserting a
+    claim; it cannot see one that went false while its bytes stayed identical. `crystal-discriminators.py
+    --run` executes the commands OFFLINE and writes verdicts; this only READS them, so no shell from a
+    note ever runs on the delivery path.
+    """
+    path = os.path.join(repo or REPO, DISC_RESULTS)
+    try:
+        mt = os.path.getmtime(path)
+    except OSError:
+        return False
+    if _disc_cache["mtime"] != mt:
+        verdicts = {}
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    try:
+                        r = json.loads(line)
+                    except Exception:
+                        continue
+                    name, v = r.get("crystal"), r.get("verdict")
+                    if not name or not v:
+                        continue
+                    # "I could not check" must never clear a refusal.
+                    if v == "inconclusive" and name in verdicts:
+                        continue
+                    verdicts[name] = v
+        except OSError:
+            return False
+        _disc_cache.update(mtime=mt, verdicts=verdicts)
+    return _disc_cache["verdicts"].get(os.path.basename(str(c.get("path") or ""))) == "fail"
+
+
+def is_expired(c, today=None, repo=None):
+    """True when the claim must no longer be asserted — by its own CHECK, by DATE, or by a bad date."""
+    if discriminator_refused(c, repo):
+        # The world answered. It outranks the calendar, in the only direction that is safe.
+        return True
+    try:
+        d = stale_after(c)
+    except ValueError:
+        return True          # unreadable date: withhold rather than assert. Fail CLOSED.
+    if d is None:
+        return False
+    return (today or _dt.date.today()) > d
+
+
+def expiry_stub(c):
+    """What an expired crystal delivers INSTEAD of its text — never the old text.
+
+    Short on purpose: roughly a tenth of a typical note, so an expired claim also stops crowding out
+    the notes that are still true. It withholds the claim and hands over the command that settles it.
+    It does NOT retire anything; retiring is a deliberate act a person takes.
+    """
+    name = os.path.basename(str(c.get("path") or "")) or (c.get("name") or "a crystal")
+    raw = (c.get("stale_after") or "").strip() or "an unreadable date"
+    disc = (c.get("discriminator") or "").strip()
+    settle = (f"**SETTLE IT FIRST — this is the one command that decides:**\n    {disc}"
+              if disc else
+              "**No discriminator was recorded on it.** Verify the claim against the repo or the live "
+              "system before repeating any part of it, and add a `discriminator:` when you do.")
+    return (f"⏳ **AN EXPIRED CLAIM WAS WITHHELD — `{name}`.** It asserts live state and its "
+            f"`stale_after: {raw}` has passed, so its text is **deliberately not delivered**: a stale "
+            f"note arrives unsourced, in the voice of settled fact, and is believed.\n"
+            f"{settle}\n"
+            f"Then **rewrite it in place** if it still holds, or delete it. Do NOT quote its old text "
+            f"from memory — that is the failure this withholding exists to prevent.")
+
+
+def apply_staleness(crystals, today=None, repo=None):
+    """Return the list with every EXPIRED crystal's text swapped for its stub.
+
+    Swapped, never dropped: dropping loses the pointer, and someone who hears nothing cannot know that
+    a claim they might repeat from memory has expired.
+    """
+    out = []
+    for c in crystals:
+        if is_expired(c, today, repo):
+            c = dict(c, essence=expiry_stub(c), expired=True)
+        out.append(c)
+    return out
+
 
 _TELL_RE = _re.compile(r"(?:⚠|🔑)\s*\*\*THE TELL[^\n]*")
 _STOP_RE = _re.compile(r"⛔+\s*\*\*(.+?)\*\*", _re.S)
