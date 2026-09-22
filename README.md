@@ -179,6 +179,19 @@ Corrector reads `git ls-files`, and **`node-cleaner.py --apply` uses `git mv`** 
 of those are reads except the `git mv`, and every `--apply` defaults to a plan that changes nothing.
 Nothing in the package reaches the network.
 
+### The capture reminder
+
+`crystallize-stop-hook.py` is the other end of the loop from everything above. Delivery is worthless if
+nothing ever gets banked, and the moment a knowing is cheapest to write down is the moment it is about
+to evaporate. At the end of a substantial session that banked nothing, it offers a template once.
+
+⚠ It deliberately avoids asking whether you learned anything. That question is answered "no" forever,
+because nothing feels new at the end of a session where you did the work. It surfaces **specific
+candidates from the session itself** — what you re-derived, what failed before it worked — so you are
+judging a concrete thing rather than searching your memory. It writes nothing and decides nothing.
+
+⛔ It needs a `Stop` hook to fire. Unwired it is an inert file, and `INSTALL.md` has the snippet.
+
 ### The scratchpad, which is the memory between sessions
 
 `crystal_scratchpad.py` ships with a `SessionStart` hook and is easy to mistake for a scratch file. It

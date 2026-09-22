@@ -48,9 +48,35 @@ now and ignore them until you want them:
 
 - `crystal_inject.py` — the *inject* channel. Re-delivers a small number of standing notes mid-session,
   on a cadence, because a rule drifts over long work. Wire it to a periodic hook when you want it.
-- `crystallize-stop-hook.py` — a `Stop` hook that notices a substantial session which banked nothing
-  new, and offers a ready-to-fill template once. It never writes anything and never decides what is
-  worth keeping.
+- `crystallize-stop-hook.py` — the capture end of the loop, and the one most worth wiring. See below.
+
+### The capture reminder
+
+Everything above is about *delivering* a knowing. This is the other end: noticing you have one while
+you still have it. At the end of a substantial session that banked nothing new, it surfaces what the
+session actually did and offers a ready-to-fill template, once.
+
+⚠ **It is not a generic "did you learn anything?"** That prompt gets answered "no" forever, because at
+the end of a session nothing feels new. It surfaces **specific candidates drawn from the work itself**
+— the thing you had to re-derive, the command that failed before it worked — so the question is about
+something concrete rather than about your memory. It never writes anything and never decides what is
+worth keeping. Those are both yours.
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      { "hooks": [ { "type": "command",
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystallize-stop-hook.py\"" } ] }
+    ]
+  }
+}
+```
+
+⛔ **Unwired, this file does nothing at all.** The same argument the scratchpad section makes applies
+here: a reminder that never fires is not a reminder, and it is worse than absent because the file
+sitting in `scripts/` feels like the capability. Earlier versions of this page copied it and left it
+cold, which is the defect being named rather than a recommendation.
 
 The act-bound channel described in this document needs only `crystal_act.py` and `crystal_registry.py`.
 
