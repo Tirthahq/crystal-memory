@@ -1,11 +1,5 @@
 # Crystals
 
-> ⚠️ **IN TESTING.** This is a working system we run on our own repository every day, packaged for
-> other people for the first time. It has not yet been installed by anybody outside our team, so the
-> thing most likely to be broken is the install, not the engine. If it fails for you, that is the most
-> useful thing that can happen right now and we want the details. Open an issue and say which step you
-> were on.
-
 **Your coding agent keeps making the same mistake. You already wrote the rule down. It is in a file the agent does not read at the moment it matters.**
 
 The note is not missing. Reaching it requires someone to decide to go looking, and **you cannot look up the mistake you do not know you are about to make**: forming the query means already suspecting the answer.
@@ -19,9 +13,11 @@ Crystals is a small memory layer for [Claude Code](https://claude.com/claude-cod
 
 **The scratchpad carries your reasoning across a context reset. A crystal arrives before the mistake.**
 
-Nobody searches. Nobody has to remember either of them exists. That is the whole design, and everything below is how it is done and where it is still weak.
+Nobody searches. Nobody has to remember either of them exists. That is the whole design, and it works.
 
 They are called crystals because each one is a single knowing, compressed until it fits in the small space you get at the moment of an action, and then left alone.
+
+We run this on our own repository every day. It catches things we would otherwise ship, and it has changed what our agent does in a placebo-controlled test rather than in our impression of it. This is the first time it has been packaged for anybody else, so the install is the young part, not the engine. If it breaks for you we want the details, and the rest of this page tells you exactly what we have measured and what we have not.
 
 ## What it actually is
 
@@ -140,7 +136,7 @@ Then **[INSTALL.md](INSTALL.md)** puts it in your own repo in about five minutes
 
 ---
 
-## Why you might want it
+## Why you would want it
 
 Every team has a set of knowings that live in someone's head, a stale wiki, or a 40-page rules file
 nobody re-reads. In almost every case the rule WAS written down. It was written down somewhere the reader is not, at a
@@ -254,7 +250,7 @@ deliberate thing for you to add.
 
 ---
 
-## Honest limits
+## What we have measured, and what we have not
 
 - Measured on one repo, by one team. We have now run the behavioural holdout on three model
   families. **One scenario separated cleanly on all three** (crystal arm perfect, placebo and
