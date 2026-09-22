@@ -165,11 +165,64 @@ If your rules are already enforced by CI and linters, you probably do not need i
 |---|---|
 | `starter/` | three portable crystals, which the seeder copies into your repo as `memory/crystals/*.md` |
 | `INSTALL.md` | the install, every command in it run verbatim under `dash` before shipping |
-| five scripts | `crystal_act.py`, `crystal_registry.py`, `crystallize-stop-hook.py`, `crystal_inject.py`, `crystal_starter.py` |
+| the loop | `crystal_act.py`, `crystal_registry.py`, `crystallize-stop-hook.py`, `crystal_inject.py`, `crystal_starter.py`, `crystal_scratchpad.py`, `crystal-discriminators.py` |
+| the maintenance layer, optional | four agents that tend the store rather than use it, plus the helpers they load. See below, and §"The maintenance layer" in `INSTALL.md`. |
 
-**Stdlib Python only.** Importing the delivery path pulls two modules, neither outside the standard
-library, and none of `subprocess`, `socket`, `ssl`, `urllib`, `http` or `asyncio`. It writes to two
-directories inside your repo and nowhere else.
+**The delivery path is stdlib Python with no process launching.** Importing it pulls two modules,
+neither outside the standard library, and none of `subprocess`, `socket`, `ssl`, `urllib`, `http` or
+`asyncio`. It writes to two directories inside your repo and nowhere else.
+
+⚠ **Two parts of the package do launch processes, and you should know which.** `crystal-discriminators.py`
+runs the command a note names, because settling a claim against the world is its entire job. The
+**maintenance layer needs `git`** and shells out to it: the Librarian reads `git diff --cached`, the
+Corrector reads `git ls-files`, and **`node-cleaner.py --apply` uses `git mv`** to relocate files. All
+of those are reads except the `git mv`, and every `--apply` defaults to a plan that changes nothing.
+Nothing in the package reaches the network.
+
+### The scratchpad, which is the memory between sessions
+
+`crystal_scratchpad.py` ships with a `SessionStart` hook and is easy to mistake for a scratch file. It
+is the part of this package that carries **continuity**, and it answers a different question from the
+crystals.
+
+A crystal is one finished knowing, pushed back at the moment of the act. The scratchpad holds the live
+working state of an agent mid-problem: the open threads, the hunch it has not proven, the thing it
+deliberately left alone and why, what it would start next. **Most of that never becomes a crystal and
+should not.** It is not truth, nothing governs it, and it is cheap to write into.
+
+What it prevents is specific: without it, a context reset leaves the next session to reconstruct your
+situation from commits and files. It recovers the facts and loses the reasoning — and the cost lands on
+you, as re-explaining your own project to your own agent. **That re-explanation is the defect**, and a
+pad that is read at boot is the direct fix for it.
+
+⛔ Which is why it ships **with** the hook. A scratchpad nobody reads at boot is a diary.
+
+### The maintenance layer
+
+| agent | what it does | on a store installed today |
+|---|---|---|
+| `librarian.py status` | dangling links, broken paths, stale stamps | runs, reports on what you have |
+| `node-cleaner.py` | consolidates over-cap folders, retires nodes to `_archive` | runs, says "Nothing to do" |
+| `node-corrector.py` | proposes fixes for files that moved | runs, writes an empty board |
+| `soul-gardener.py` | reads your own agent transcripts for whether the discipline is being lived | needs `TRANSCRIPT_DIR` set |
+
+**The Gardener needs one pointer the other three do not.** It reads your agent's `*.jsonl` session
+transcripts, and the default falls back to the published `scratch/`, which is the delivery ledger and
+never holds transcripts. So out of the box it exits non-zero saying it found no assistant turns.
+
+⚠ **That is a configuration step, not a maturity threshold, and we had it wrong in an earlier draft of
+this file.** We assumed it was waiting for a store to accumulate history. It is not: in our own repo,
+with 31 `.jsonl` files sitting in `scratch/`, it still exited 1 — and pointed at the real transcript
+directory it read 12 sessions and 2,349 assistant turns immediately. Set `TRANSCRIPT_DIR` to wherever
+your agent writes transcripts and it works on your first session. The refusal now prints that remedy.
+
+⛔ And the one thing the Gardener must never become: it is **evidence for two people to look at, never
+a gate and never a score.** Nothing branches on it. The moment "is the discipline being lived" becomes
+a target, it gets optimised and stops measuring anything.
+
+An optional `.store-policy.json` in your repo root holds your install's exceptions — which folders are
+archives, which carry a raised cap and why. There is no default file and not having one is the normal
+case. `INSTALL.md` has the shape.
 
 **It speaks, and it never blocks.** Our own repo runs gates that refuse commits, and we left them out
 of this package, because enforcing our rules on your work would be hostile. If you want blocking, that is a
@@ -190,6 +243,13 @@ deliberate thing for you to add.
   accuracy; too narrow and it never fires. There is no tuning loop yet, only your judgement.
 - The freshness check detects **drift** and stops there. It knows the source moved; whether the note is
   now wrong stays beyond it.
+- The maintenance layer is **new here and has been run against a day-0 store, not a large one.** We
+  measured it on a clean install: three of four agents run, one refuses for a stated reason, and a full
+  retire works end to end. What we have *not* measured is what it does to a store with years in it and
+  a shape unlike ours, which is the report we would most like back.
+- `.store-policy.json` refuses a file it cannot trust rather than reading it as empty, including on an
+  unknown key. A typo silently disabling an exclusion is the failure we chose to make loud, and the
+  cost is that a malformed policy stops the agents until you fix it.
 
 ---
 

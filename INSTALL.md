@@ -87,9 +87,20 @@ first thing this tool does is refuse.
 
 **3. Seed the scratchpad, and wire it so it is actually read.**
 
-A crystal is a finished knowing. You do not arrive at one directly — you notice something half-formed
-mid-session and by the next session it is gone. The scratchpad is where that lives until it is worth
-crystallising.
+**The scratchpad is the memory between your sessions, and it is not a waiting room for crystals.**
+That distinction matters more than it sounds. A crystal is one finished knowing, delivered back to you
+at the moment you are about to need it. The scratchpad is the other thing entirely: the live working
+state of an agent mid-problem — which threads are open, what it half-suspects and has not proven, what
+it would pick up next, why something is deliberately left undone.
+
+Most of what belongs in it will never become a crystal, and should not. It is not truth and it is not
+governed; it is the texture of in-progress thought, which is precisely what a context reset destroys.
+Without it the next session reconstructs your situation from the artifacts and gets the facts while
+losing the reasoning, and you end up re-explaining your own project to your own agent. With it, the
+session boots knowing what it was in the middle of.
+
+Crystallising is a separate act that sometimes happens later. Treating the pad as a staging area for
+that is the way to end up with an empty one.
 
 ```sh
 python3 "$CRYSTALS/scripts/crystal_scratchpad.py" --seed
@@ -343,10 +354,21 @@ without them, and nothing above depends on them.
 | `librarian.py status` | reports dangling links, broken paths, stale stamps | runs; reports on what you have |
 | `node-cleaner.py` | consolidates over-cap folders (`--apply` to act; default is a plan) | runs; says "Nothing to do" |
 | `node-corrector.py` | proposes fixes for moved files (`--apply` for the confident ones) | runs; writes an empty board |
-| `soul-gardener.py` | grows the store from how you actually search it | **refuses** until it has usage data |
+| `soul-gardener.py` | reads your agent transcripts for whether the discipline is being lived | needs `TRANSCRIPT_DIR` |
 
-The Gardener's refusal is the honest answer, not a bug: it mines your own transcripts, and a store
-installed today has none. It is listed here so the refusal is expected rather than alarming.
+**The Gardener takes one pointer the other three do not.** It reads `*.jsonl` session transcripts, and
+its default falls back to the published `scratch/` — the delivery ledger, which never holds
+transcripts. Out of the box it therefore exits non-zero reporting no assistant turns, and prints the
+remedy. Set it to wherever your agent writes transcripts:
+
+```sh
+TRANSCRIPT_DIR=~/path/to/agent/transcripts python3 scripts/soul-gardener.py
+# or: python3 scripts/soul-gardener.py --transcripts-dir <dir>
+```
+
+⚠ This is a configuration step, **not** a threshold you have to grow into: with the variable set it
+reports on your very first session. ⛔ It is evidence for a human to read, never a gate and never a
+score — nothing may branch on it.
 
 ⚠ `node-cleaner.py --apply` and `node-corrector.py --apply` MOVE AND REWRITE FILES. Both default to a
 plan that changes nothing. Read the plan first. Both are bounded by the directories declared above and

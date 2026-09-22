@@ -132,14 +132,27 @@ def main() -> int:
     # Only the user's own assistant usage ledger; never read ingested node text.
     transcripts = a.transcripts_dir or Path(os.environ.get("TRANSCRIPT_DIR") or contract.scratch_dir)
 
+    # ⛔ THE FALLBACK IS THE PUBLISHED scratch/, AND TRANSCRIPTS DO NOT LIVE THERE — FOR ANYONE.
+    # `scratch/` is the delivery ledger by the install contract's own words, so the default resolves to
+    # a directory that never contains assistant turns. MEASURED 2026-09-22 in OUR OWN repo: scratch/
+    # held 31 .jsonl files and this exited 1; pointed at the real transcript directory it read 12
+    # sessions and 2,348 turns and exited 0. So the refusal was never about a store being too young —
+    # it is an UNSET POINTER, and it misreads as "this agent does not work yet".
+    # 🔑 An error naming the remedy costs one line and is the difference between a tester filing a bug
+    # and a tester setting a variable.
+    hint = ("set TRANSCRIPT_DIR to the directory holding your agent's *.jsonl session transcripts, "
+            "or pass --transcripts-dir; the default is the published scratch/, which is the delivery "
+            "ledger and never holds transcripts")
     if not transcripts.is_dir():
-        print(f"soul-gardener: NO TRANSCRIPT DIR at {transcripts} — cannot answer"); return 1
+        print(f"soul-gardener: NO TRANSCRIPT DIR at {transcripts} — cannot answer.\n  {hint}")
+        return 1
     files = sorted(transcripts.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
     if a.session:
         files = [f for f in files if f.name.startswith(a.session)]
     per = scan(files[: a.recent] if not a.session else files)
     if not per:
-        print(f"soul-gardener: cannot answer: no assistant turns found in {transcripts}"); return 1
+        print(f"soul-gardener: cannot answer: no assistant turns found in {transcripts}\n  {hint}")
+        return 1
 
     pos_total = sum(v.get(k, 0) for v in per.values()
                     for k in ("self_correction", "against_interest", "evidence_named", "graded_review"))
