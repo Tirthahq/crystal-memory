@@ -25,6 +25,21 @@ export CRYSTALS=~/src/crystal-memory      # used by the commands below
 
 Then `cd` into **your own repo**, the one you want the crystals in.
 
+## One command
+
+From inside your own repo:
+
+```sh
+sh "$CRYSTALS/install.sh"
+```
+
+It creates the three directories, copies the loop, seeds the starter crystals, and then **runs a
+context that must match one of them** so you see the loop fire before you believe it. It does not touch
+your hook config; it prints the hooks for you to paste. A second run overwrites nothing and says what
+it skipped.
+
+The rest of this page is the same install done by hand, plus everything the one command does not do.
+
 ---
 
 ## What you are installing

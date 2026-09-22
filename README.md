@@ -250,6 +250,18 @@ deliberate thing for you to add.
 
 ---
 
+## Install
+
+From inside your repo, pointing at a clone of this one:
+
+```sh
+sh "$CRYSTALS/install.sh"
+```
+
+It ends by firing a real crystal at you, so "it installed and nothing happened" is answered before you
+can ask it. Hooks are printed for you to paste rather than written into your settings. `INSTALL.md` has
+the by-hand version and the optional maintenance layer.
+
 ## What we have measured, and what we have not
 
 - Measured on one repo, by one team. We have now run the behavioural holdout on three model
