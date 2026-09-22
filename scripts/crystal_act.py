@@ -63,7 +63,7 @@ CLAIM_BINDING_ESSENCE = (
     "CLAIM-SHAPED WRITE: pause before this strategy/positioning claim hardens. "
     "Ask: (1) What would FALSIFY this? "
     "(2) Does an existing vision/positioning node already claim something DIFFERENT? "
-    "Check VISION-what-we-are-building: the extender is the DOOR, not the destination. "
+    "Check [[VISION-what-we-are-building]]: the extender is the DOOR, not the destination. "
     "(3) Have you briefed this leg to an adversary, or only the legs you like? "
     "Name the legs you did NOT brief."
 )
@@ -85,20 +85,6 @@ _FALSIFIER_SECTION_RE = re.compile(
     re.I,
 )
 
-
-
-def _redacted(text):
-    """Strip credential-shaped strings before this leaves for a model's context.
-
-    A commit gate cannot cover a delivery: the text is read from the store as it is now, committed or
-    not, and in an install it is YOUR store rather than ours. Fails OPEN on any error, because a
-    redactor that crashes the delivery would silence the channel it exists to protect.
-    """
-    try:
-        import redact
-        return redact.redact(text)
-    except Exception:
-        return text
 
 def is_claim_shaped_write(ctx, target=""):
     """Return True when a Write/Edit is the nearest act to a strategic claim forming.
@@ -214,23 +200,57 @@ def _infer_act(payload):
     return ""
 
 
+# ⛔ RELEVANCE FELL AS THE WRITE GOT LONGER, WHICH IS EXACTLY BACKWARDS. MEASURED 2026-09-17 on a
+# 7,638-char handoff: matching the FILE PATH admitted 2 crystals, matching the DOCUMENT TEXT admitted
+# 39. `match:` is a substring test, so every extra paragraph buys more accidental keyword hits, the
+# 4000-char budget then delivers two of them and starves thirty-seven. Writing prose that evening
+# surfaced two long crystals about pty panes and `glow` staying on screen, ranked top of thirty-five.
+# The more careful the work, the noisier the channel got.
+#
+# THE RULE: a key hit deep in a long body is a coincidence; a key hit in the SUBJECT is relevance.
+# The subject of a write is its path plus its opening (title, frontmatter, lede). Below LONG_CTX the
+# whole payload IS the subject, so short acts, every bash command among them, keep today's behaviour
+# byte for byte and the existing bindings cannot regress.
+HEAD_CHARS = 600         # path + title + frontmatter + lede: what the write is ABOUT
+LONG_CTX = 2000          # above this, body-only keyword hits stop predicting relevance
+
+
+def match_scope(ctx, target="", long_ctx=None, head=None):
+    """The text a `match:` key must appear in for this act. See the note above."""
+    long_ctx = LONG_CTX if long_ctx is None else long_ctx
+    head = HEAD_CHARS if head is None else head
+    ctx = ctx or ""
+    subject = ctx if len(ctx) <= long_ctx else ctx[:head]
+    return (subject + " " + (target or "")).lower()
+
+
 def matches_ctx(c, ctx_l):
-    """Does this crystal's `match:` comma-list admit this act's text? No `match:` ⇒ always."""
-    # DEPENDENCY GATING. `match:` is a broad OR-list, so a note about ONE resource fires on acts about
-    # any other. Measured on our own store: a note about one server fired identically for that server's
-    # id and for a completely different one, because the match list also contained the project name.
-    # `depends_on:` is an AND on top — the act must actually NAME this note's resource.
-    #   depends_on: i-0123456789abcdef0, vol-0fedcba9876543210
-    # ⚠ It gates ONLY when the act names a COMPETING resource of the same shape. Gating bluntly also
-    # silenced a GENERIC mention of the project, and that is exactly when such a note most needs to
-    # fire — a worse failure than the noise it fixed. An act naming no resource at all falls through
-    # to `match:` unchanged, so recall is preserved and only the wrong-resource case is removed.
+    """Does this crystal's `match:` comma-list admit this act's text? No `match:` ⇒ always.
+
+    `ctx_l` is the SCOPE from match_scope(), not the raw payload. An unconditional binding (no
+    `match:` list) is deliberate and still always admitted; narrowing applies to keyword bindings.
+    """
+    # ⭐ DEPENDENCY GATING (deliverable 2 of the invalidation ticket, 2026-09-22). `match:` is a broad
+    # OR-list, so a crystal about ONE resource fires on acts about any other. Measured: the vimsara
+    # crystal fired identically for `start-instances --instance-ids i-0537b62e3a76cc5aa` and for a
+    # DIFFERENT instance id, because `vimsara` and `start-instances` are also in its match list.
+    # `depends_on:` is an AND on top: the act must actually NAME this crystal's resource.
+    # Deterministic — a literal id the act already carries, never an embedding, and it can only ever
+    # NARROW delivery, so a crystal without the key behaves exactly as before.
     dep = (c.get("depends_on") or "").strip().lower()
     if dep:
         ids = [d.strip() for d in dep.split(",") if d.strip()]
         if ids and not any(d in ctx_l for d in ids):
+            # ⚠ ONLY gate when the act names a COMPETING resource of the same shape. A blunt
+            # "deps must appear" also silenced a generic `vimsara` mention, and this crystal's whole
+            # job is to stop you PLANNING a run — losing that is a worse failure than the noise it
+            # fixes. So: the act names some `i-…`/`vol-…` that is not ours ⇒ it is about a different
+            # resource, withhold. The act names no such id at all ⇒ fall through to `match:` as before.
+            # Recall is preserved; only the wrong-resource case is removed.
             prefixes = {d.split("-", 1)[0] + "-" for d in ids if "-" in d}
-            if any(re.search(r"\b" + re.escape(pre) + r"[0-9a-z]{6,}", ctx_l) for pre in prefixes):
+            competing = any(re.search(r"\b" + re.escape(p) + r"[0-9a-z]{6,}", ctx_l)
+                            for p in prefixes)
+            if competing:
                 return False
     mp = (c.get("match") or "").strip().lower()
     if not mp:
@@ -253,13 +273,13 @@ def candidates(act, ctx="", target="", who=None, repo=None, crystals=None):
                        act, who=who)
     if act == "write":
         cands = _claim_shaped_binding(ctx, target) + cands
-    ctx_l = (ctx or "").lower()
+    ctx_l = match_scope(ctx, target)
     live = [c for c in cands if (c.get("essence") or "").strip() and matches_ctx(c, ctx_l)]
-    # Staleness is applied HERE, at the one function every caller shares, so a report and the live
-    # hook can never disagree about what is expired. An expired crystal keeps its slot and delivers a
-    # stub instead of its text: it must not assert live state it can no longer vouch for, and it must
-    # not vanish either, or someone repeats it from memory.
-    return cr.apply_staleness(live, repo=repo)
+    # ⛔ ACT-CHANNEL STALENESS, applied HERE so the audit replay and the real hook cannot diverge —
+    # the same reason `candidates` was split out of `due_for` in the first place. An expired crystal
+    # keeps its slot but delivers a stub instead of its essence: it must never assert live state it
+    # can no longer vouch for, and it must not vanish either, or a session repeats it from memory.
+    return cr.apply_staleness(live)
 
 
 def order(cands, act, session, led=None, now=None):
@@ -320,6 +340,22 @@ class Due(list):
     starved_pairs = ()
 
 
+
+def _redacted(text):
+    """Strip credential-shaped strings before this leaves for a model's context.
+
+    ⛔ THE COMMIT GATE CANNOT COVER THIS CHANNEL. Our secret scan reads the staged diff and tracked-file
+    content; a delivery carries whatever is in the store right now, including a file edited but not yet
+    committed. And in a shipped install the store is a stranger's. Fails OPEN on any error: a redactor
+    that can crash the delivery would silence the channel it exists to protect, which is the worse
+    failure. Verified not to alter any of our 95 shipped essences or the scratchpad.
+    """
+    try:
+        import redact
+        return redact.redact(text)
+    except Exception:
+        return text
+
 def pack(cands, budget=None):
     """Greedy fit at whole-crystal granularity. Returns (delivered, starved) as [(c, piece)].
 
@@ -329,7 +365,8 @@ def pack(cands, budget=None):
     + matcher + selftest): 8 matched, 11,559 chars — break delivered **3**, using only **1807 of the
     4000-char budget**. It was not merely unfair, it left 55% of the budget unspent. Skipping instead
     of breaking delivers 5 for 3568 chars, and the 3 it still cannot fit come back first next act
-    (see `order`). The budget stays 4000 on purpose: it is the wallpaper guard, and a fix that delivered all 8 every time would be the
+    (see `order`). The budget stays 4000 on purpose: it is the wallpaper guard
+    (crystal-inject-budget-discipline), and a fix that delivered all 8 every time would be the
     regression, not the win.
     """
     budget = CHARS_BUDGET if budget is None else budget
@@ -388,10 +425,12 @@ def due_for(act, session, now=None, repo=None, dry=False, ctx="", target="", max
         seen = led.get(f"act-session:{session}:{act}:{base}", 0)
         if seen >= MAX_PER_SESSION:
             continue
-        # An EXPIRED crystal is announced once per session, then goes quiet. The stub still bumps the
-        # session counter below, so without this it rotates like a live note and keeps taking a slot
-        # and ~700 chars of a bounded budget for a payload that carries no knowing, only a pointer.
-        # Enough expired notes and the withhold notices ARE the channel.
+        # ⛔ AN EXPIRED CRYSTAL IS ANNOUNCED ONCE PER SESSION, THEN GOES QUIET. Raised by Grok in the
+        # 2026-09-22 review of this mechanism and re-derived here: a stub still bumps the session
+        # counter at the bottom of this function, so it rotates like any live crystal and keeps taking
+        # a slot and ~675 chars of a 4000-char shared budget — for a payload that carries no knowing,
+        # only a pointer. Enough expired crystals and the withhold notices ARE the channel.
+        # Once is what the pointer is worth; after that, silence costs the reader nothing.
         if c.get("expired") and seen >= 1:
             continue
         if now - led.get(f"act:{act}:{base}", 0) < BASE_MIN * (BACKOFF_BASE ** seen) * 60:
@@ -524,7 +563,8 @@ def main():
             max_n = None                # a malformed --max means "no cap", never "deliver nothing"
 
     try:
-        due = due_for(act, _session_id(payload), dry=args.dry, ctx=ctx, target=target,
+        session = _session_id(payload)
+        due = due_for(act, session, dry=args.dry, ctx=ctx, target=target,
                       max_n=max_n)
     except Exception:
         return 0                        # delivery must never break a turn
@@ -584,7 +624,8 @@ def main():
         try:
             import crystal_registry as cr
             for c, _p in due:
-                cr.record_delivery("act", c.get("path"), event=ev)
+                cr.record_delivery("act", c.get("path"), event=ev, act=act,
+                                   session=(session if session and session != "nosession" else None))
         except Exception:
             pass
         return 0
@@ -593,7 +634,8 @@ def main():
     try:
         import crystal_registry as cr
         for c, _p in due:
-            cr.record_delivery("act", c.get("path"), event=ev)
+            cr.record_delivery("act", c.get("path"), event=ev, act=act,
+                               session=(session if session and session != "nosession" else None))
     except Exception:
         pass                        # telemetry must never cost a delivery
     return 0
@@ -624,6 +666,25 @@ def selftest():
           "empty act fires nothing")
     check(all(c.get("on") for c in cr.for_act(cs, "bash", who=None)),
           "a crystal with no `on:` is never act-delivered")
+
+    # --- SUBJECT SCOPE: relevance must not fall as the payload grows ------------------------------
+    # Regression this closes, MEASURED 2026-09-17: `match:` was tested against the WHOLE payload, so a
+    # 7,638-char handoff admitted 39 crystals where its path admitted 2, and the two actually
+    # delivered were about pty panes while the act was writing prose. Longer work, worse delivery.
+    _far = {"path": "/x/far.md", "on": "write", "essence": "E", "who": "all", "match": "widget"}
+    _short = "a note about a widget"
+    _long = ("filler. " * 400) + "and here we mention a widget once, deep in the body"
+    check(matches_ctx(_far, match_scope(_short)),
+          "SCOPE: a key in a SHORT payload still admits (short acts unchanged)")
+    check(not matches_ctx(_far, match_scope(_long)),
+          "SCOPE: the same key, buried in a LONG body, no longer admits (the 39-crystal defect)")
+    check(matches_ctx(_far, match_scope(_long, target="docs/widget-design.md")),
+          "SCOPE: …but a key in the TARGET PATH admits even in a long body (subject beats length)")
+    check(matches_ctx(_far, match_scope("a widget appears early. " + ("filler. " * 400))),
+          "SCOPE: …and a key in the OPENING admits (title/frontmatter/lede is the subject)")
+    check(matches_ctx({"path": "/x/blanket.md", "on": "write", "essence": "E", "who": "all"},
+                      match_scope(_long)),
+          "SCOPE: an unconditional binding (no `match:`) is deliberate and still always admitted")
 
     # --- `match`: a crystal binds to a SPECIFIC command/file, not just the act type -----------------
     # Regression this closes: `match` was in the convention (reply-lane crystal) but UNIMPLEMENTED, so

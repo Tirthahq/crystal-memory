@@ -349,7 +349,7 @@ SCAFFOLD = (
     "---\n"
     "# <title>\n"
     "<the knowing — WHAT was learned>. **Why:** <why it's true / why it matters>. "
-    "**How to apply:** <what the next session should DO>. Links: related-node.\n\n"
+    "**How to apply:** <what the next session should DO>. Links: [[related-node]].\n\n"
     "ROUTE: soul/relational -> memory/claude/ · finding/measurement -> memory/business/strategy/ (FINDING-*) · "
     "session state -> /handoff. Then stop again to finish."
 )
@@ -357,7 +357,7 @@ SCAFFOLD = (
 
 def build_reason(digs):
     """The DIG IS THE SIGNAL: if this session grepped memory/ to LOCATE things, name them so the ask is
-    SPECIFIC and evidence-driven, not a generic 'did you learn anything?'."""
+    SPECIFIC and evidence-driven, not a generic 'did you learn anything?' (crystals-the-dig-is-the-signal)."""
     if not digs:
         return SCAFFOLD
     shown = digs[:8]

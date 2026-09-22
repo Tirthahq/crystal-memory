@@ -106,8 +106,8 @@ def invalid_bindings(crystals):
             why.append(f"who={c.get('who')!r} is not a reader")
         if c.get("deliver") == "act" and not str(c.get("on") or "").strip():
             why.append("deliver=act with no `on:` — registers cleanly and never fires")
-        # A malformed stale_after must be LOUD. Silently treating it as "no expiry" would restore the
-        # behaviour the key exists to remove, in the permissive direction, invisibly.
+        # A malformed stale_after must be LOUD. Silently treating it as "no expiry" would restore
+        # exactly the behaviour the key exists to remove, in the permissive direction, invisibly.
         try:
             stale_after(c)
         except ValueError:
@@ -137,31 +137,28 @@ def _essence_marker_state(text):
         return "MISSING OPEN MARKER"
     return "EMPTY ESSENCE"
 
-# ─── STALENESS: a note that asserts LIVE STATE needs a shelf life ──────────────────────────────────
-# WHY. A crystal arrives unsourced and undated, in the voice of settled fact, at the moment of an
-# action. A stale DOCUMENT is inspectable and dated; a stale CRYSTAL is simply believed. We measured
-# this hurting us twice: a note said a feature was unbuilt when it had shipped a week earlier, and the
-# founder was asked to re-decide something already settled.
+# ─── ACT-CHANNEL STALENESS (Part 2 of the invalidation ticket, 2026-09-22) ────────────────────
+# ⛔ THE EXPOSURE THIS CLOSES: a crystal asserts its content in the VOICE OF SETTLED FACT, unsourced,
+# at the moment of the act. A stale DOCUMENT is inspectable and dated; a stale CRYSTAL is believed.
+# `crystal-freshness.py` already watches SELF-staleness (did the file change). This is the other axis,
+# WORLD-staleness: the vimsara crystal can stay byte-identical forever and become false the instant
+# that box boots. The literature the maintainer supplied is blunt that similarity cannot close it — cosine scores
+# AUROC 0.59 at telling a contradicted fact from a duplicate — so this is DETERMINISTIC by design: a
+# date and a command, no embedding.
 #
-# It is DETERMINISTIC on purpose. In the agent-memory literature, embedding similarity is close to
-# useless at telling a CONTRADICTED fact from a DUPLICATE one (reported AUROC ~0.59), so this is a
-# date and a command — never a semantic guess.
-#
-#   stale_after   : YYYY-MM-DD  — the last day the claim stands.
-#   discriminator : the ONE command that settles whether it still holds.
-#
-# ⛔ THE DISCRIMINATOR CONTRACT: exit 0 while the claim HOLDS, non-zero when it is FALSIFIED.
-#    This is not automatic and the first one we wrote failed it — a cloud CLI call printed one answer
-#    when our box was down and another when it was back and exited 0 BOTH TIMES, so a runner keyed on
-#    the exit code would have read "claim holds" forever, including on the day it stopped being true.
-#    Wrap the answer in a `test`. A check that cannot fail is a check you do not have.
+# ⚠ ONE OWNER ON PURPOSE. The delivery path (crystal_act) and the reporting eye (crystal-freshness)
+# both call these. A duplicated derivation of "is this expired" would drift only for the rows where
+# the inputs disagree — i.e. invisibly, until the day it matters.
+#   stale_after   : YYYY-MM-DD — after this date the essence MUST NOT be asserted.
+#   discriminator : the ONE command that settles whether the claim still holds.
 
 
 def stale_after(c):
     """Parsed `stale_after` as a date, or None. Raises ValueError on a malformed value.
 
-    ⛔ MALFORMED MUST NOT MEAN "NEVER EXPIRES" — that is the permissive direction, and a typo would
-    silently restore exactly the behaviour this key removes.
+    ⛔ MALFORMED MUST NOT MEAN "NEVER EXPIRES". That is the permissive direction, and this store's
+    whole failure mode is silent permissiveness — a typo would quietly restore the exact behaviour
+    this feature removes. `invalid_bindings` turns the raise into a loud registration error.
     """
     raw = (c.get("stale_after") or "").strip()
     if not raw:
@@ -169,21 +166,26 @@ def stale_after(c):
     return _dt.datetime.strptime(raw, "%Y-%m-%d").date()
 
 
-# Where the discriminator runner records its verdicts. Gitignored, per-machine, and it must NOT be
-# rotated or pruned on age: its whole value is that it is older than the claims it judges.
-DISC_RESULTS = os.path.join("scratch", "discriminator-runs.jsonl")
+_DISC_RESULTS = os.path.join("memory", "research", "paper-data", "discriminator-runs.jsonl")
 _disc_cache = {"mtime": None, "verdicts": {}}
 
 
 def discriminator_refused(c, repo=None):
-    """True when this crystal's own discriminator last exited non-zero.
+    """True when this crystal's OWN discriminator last exited non-zero.
 
-    This is the half that OBSERVES THE WORLD. `stale_after` only schedules when you stop asserting a
-    claim; it cannot see one that went false while its bytes stayed identical. `crystal-discriminators.py
-    --run` executes the commands OFFLINE and writes verdicts; this only READS them, so no shell from a
-    note ever runs on the delivery path.
+    ⭐ THIS IS THE HALF THAT OBSERVES THE WORLD. `stale_after` only schedules when we stop asserting;
+    it cannot see a claim that went false while its bytes stayed identical — which is the exact case
+    this whole mechanism exists for. `scripts/crystal-discriminators.py --run` executes the recorded
+    commands OFFLINE and writes the verdicts here; this only ever READS them, so no shell ever runs on
+    the hot path.
+
+    THE CONTRACT a discriminator must satisfy: **exit 0 while the claim HOLDS, non-zero when it is
+    FALSIFIED.** ⚠ Not automatic — measured 2026-09-22, the first one we wrote did not satisfy it: the
+    bare `aws ssm ... --query PingStatus` prints `None` when the box is down and `Online` when it is
+    back and **exits 0 either way**, so a runner keyed on the exit code would have read "claim holds"
+    forever, including on the day it stopped being true. Wrap the answer in a `test` so it can refuse.
     """
-    path = os.path.join(repo or REPO, DISC_RESULTS)
+    path = os.path.join(repo or REPO_DEFAULT(), _DISC_RESULTS)
     try:
         mt = os.path.getmtime(path)
     except OSError:
@@ -210,51 +212,57 @@ def discriminator_refused(c, repo=None):
     return _disc_cache["verdicts"].get(os.path.basename(str(c.get("path") or ""))) == "fail"
 
 
+def REPO_DEFAULT():
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def is_expired(c, today=None, repo=None):
-    """True when the claim must no longer be asserted — by its own CHECK, by DATE, or by a bad date."""
+    """True when the claim must no longer be asserted — by DATE, by a bad date, or by its own CHECK."""
     if discriminator_refused(c, repo):
-        # The world answered. It outranks the calendar, in the only direction that is safe.
+        # The world answered. It outranks the calendar in the only direction that is safe: a claim its
+        # own check refuses stops being asserted NOW, not at the end of a window somebody guessed.
         return True
     try:
         d = stale_after(c)
     except ValueError:
-        return True          # unreadable date: withhold rather than assert. Fail CLOSED.
+        return True          # unparseable date: withhold rather than assert. Fail CLOSED.
     if d is None:
         return False
     return (today or _dt.date.today()) > d
 
 
 def expiry_stub(c):
-    """What an expired crystal delivers INSTEAD of its text — never the old text.
+    """What an expired crystal delivers INSTEAD of its essence — never the old essence.
 
-    Short on purpose: roughly a tenth of a typical note, so an expired claim also stops crowding out
-    the notes that are still true. It withholds the claim and hands over the command that settles it.
-    It does NOT retire anything; retiring is a deliberate act a person takes.
+    Short on purpose: ~10% of a median essence, so an expired claim also stops crowding out the
+    crystals that are still true. It withholds the claim and hands over the one command that settles
+    it; it does NOT retire anything. Auto-retire is allowed by policy but is a separate, deliberate
+    act — and auto-MINT stays forbidden (crystal-never-mint-from-imported-data).
     """
     name = os.path.basename(str(c.get("path") or "")) or (c.get("name") or "a crystal")
-    raw = (c.get("stale_after") or "").strip() or "an unreadable date"
+    raw = (c.get("stale_after") or "").strip() or "an unparseable date"
     disc = (c.get("discriminator") or "").strip()
     settle = (f"**SETTLE IT FIRST — this is the one command that decides:**\n    {disc}"
               if disc else
               "**No discriminator was recorded on it.** Verify the claim against the repo or the live "
-              "system before repeating any part of it, and add a `discriminator:` when you do.")
+              "system before you repeat any part of it, and add a `discriminator:` when you do.")
     return (f"⏳ **AN EXPIRED CLAIM WAS WITHHELD — `{name}`.** It asserts live state and its "
-            f"`stale_after: {raw}` has passed, so its text is **deliberately not delivered**: a stale "
-            f"note arrives unsourced, in the voice of settled fact, and is believed.\n"
+            f"`stale_after: {raw}` has passed, so its essence is **deliberately not delivered**: a "
+            f"stale crystal arrives unsourced, in the voice of settled fact, and is believed.\n"
             f"{settle}\n"
-            f"Then **rewrite it in place** if it still holds, or delete it. Do NOT quote its old text "
+            f"Then **re-mint it in place** if it still holds, or retire it. Do NOT quote its old text "
             f"from memory — that is the failure this withholding exists to prevent.")
 
 
-def apply_staleness(crystals, today=None, repo=None):
-    """Return the list with every EXPIRED crystal's text swapped for its stub.
+def apply_staleness(crystals, today=None):
+    """Return the list with every EXPIRED crystal's essence swapped for its stub.
 
-    Swapped, never dropped: dropping loses the pointer, and someone who hears nothing cannot know that
-    a claim they might repeat from memory has expired.
+    Swapped, never dropped: dropping loses the pointer, and a session that hears nothing cannot know
+    a claim it might repeat from memory has expired.
     """
     out = []
     for c in crystals:
-        if is_expired(c, today, repo):
+        if is_expired(c, today):
             c = dict(c, essence=expiry_stub(c), expired=True)
         out.append(c)
     return out

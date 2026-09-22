@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-crystal_inject.py — the INJECT channel of from-within crystal deployment.
+crystal_inject.py — the INJECT channel of from-within crystal deployment (SPEC-crystal-from-within-deployment-2026-07-11).
 
 Boot delivers crystals at session start; INJECT delivers them MID-RUN via the nervous system (SPEAK), because a
 rule drifts over long work and the refresh is what catches it (the drift-map's "refresh caught me over the 18h
@@ -40,9 +40,11 @@ BACKOFF_BASE = 2.0           # nth repeat needs ttl * BACKOFF_BASE**n minutes
 def _redacted(text):
     """Strip credential-shaped strings before this leaves for a model's context.
 
-    A commit gate cannot cover a delivery: the text is read from the store as it is now, committed or
-    not, and in an install it is YOUR store rather than ours. Fails OPEN on any error, because a
-    redactor that crashes the delivery would silence the channel it exists to protect.
+    ⛔ THE COMMIT GATE CANNOT COVER THIS CHANNEL. Our secret scan reads the staged diff and tracked-file
+    content; a delivery carries whatever is in the store right now, including a file edited but not yet
+    committed. And in a shipped install the store is a stranger's. Fails OPEN on any error: a redactor
+    that can crash the delivery would silence the channel it exists to protect, which is the worse
+    failure. Verified not to alter any of our 95 shipped essences or the scratchpad.
     """
     try:
         import redact
