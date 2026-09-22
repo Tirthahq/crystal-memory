@@ -10,6 +10,9 @@ arrival:
   - C: i just opened it and still has spacing issues and looks like nothing was done
   - C: the coverletter seemed to be in a different file format and did not work
   - G: the README examples don't match what I get when I run it
+arrival_fp:
+  - a CSS or browser layout complaint (grid, Safari, responsive) - the spacing sentence reads as
+    UI-domain and pulled an out-of-domain symptom here in a blind run, 2026-09-22
 ---
 
 ## Symptom

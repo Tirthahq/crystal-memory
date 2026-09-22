@@ -34,6 +34,10 @@ families below are the other door, and the gap is worth telling us about.
 | it works on my machine but CI is red | E | [an-instrument-that-reshapes-input-fabricates-the-test](an-instrument-that-reshapes-input-fabricates-the-test.md) |
 | it works for me and not for my teammate | E | [an-instrument-that-reshapes-input-fabricates-the-test](an-instrument-that-reshapes-input-fabricates-the-test.md) |
 
+⚠ **Known false positives, measured and published rather than quietly removed.** A sentence that reads as one domain can pull an unrelated symptom to its entry. Reported by a blind run against this index, so the fix belongs to the next blind run and not to us tuning the wording against a result we have already seen:
+
+- `a-generated-document-is-unverified-until-you-render-it` — a CSS or browser layout complaint (grid, Safari, responsive) - the spacing sentence reads as UI-domain and pulled an out-of-domain symptom here in a blind run, 2026-09-22
+
 ⚠ **3 of 12 entries have no arrival sentence at all.** They are reachable only from the symptom tables below, which means reachable only by someone who already suspects the mechanism. Published rather than papered over, because a sentence invented to fill the gap would recreate the exact defect this section was built to fix:
 
 - `a-surviving-mutant-can-mean-the-code-is-dead`
