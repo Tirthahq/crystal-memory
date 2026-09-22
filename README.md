@@ -17,6 +17,10 @@ Nobody searches. Nobody has to remember either of them exists. That is the whole
 
 They are called crystals because each one is a single knowing, compressed until it fits in the small space you get at the moment of an action, and then left alone.
 
+**And there is a third thing here you can use without installing anything.** [`catalogue/`](catalogue/README.md) is twelve real verification failures from running this on our own repo: cases where a check passed while the thing it checked was broken, or a measurement was true about the wrong population. Every entry carries the rival explanation and the discriminator that separated them, which is the field most collections of this kind leave out. It opens on an **arrival index** keyed to what you would actually say before you know the cause, because an outside tester measured that the symptom names underneath it are unreachable from there. Three of the twelve still have no arrival sentence and the page says so.
+
+⚠ The index page is generated in our tree and the generator is not shipped: it resolves every entry back to the crystal it was derived from in our own store, so on your machine it would refuse each row rather than rebuild the page. The entries are plain markdown and stand without it.
+
 We run this on our own repository every day. It catches things we would otherwise ship, and it has changed what our agent does in a placebo-controlled test rather than in our impression of it. This is the first time it has been packaged for anybody else, so the install is the young part, not the engine. If it breaks for you we want the details, and the rest of this page tells you exactly what we have measured and what we have not.
 
 ## What it actually is
@@ -170,6 +174,7 @@ If your rules are already enforced by CI and linters, you probably do not need i
 
 | | |
 |---|---|
+| `catalogue/` | twelve verification failures, readable with nothing installed, opening on an arrival index |
 | `starter/` | three portable crystals, which the seeder copies into your repo as `memory/crystals/*.md` |
 | `INSTALL.md` | the install, every command in it run verbatim under `dash` before shipping |
 | the loop | `crystal_act.py`, `crystal_registry.py`, `crystallize-stop-hook.py`, `crystal_inject.py`, `crystal_starter.py`, `crystal_scratchpad.py`, `crystal_handoff.py`, `crystal-discriminators.py` |
