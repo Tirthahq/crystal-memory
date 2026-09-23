@@ -667,6 +667,46 @@ def main():
         return 0                        # delivery must never break a turn
 
     if not due:
+        # ⛔ SILENCE IS TWO OPPOSITE ANSWERS AND THEY RENDERED IDENTICALLY. Measured 2026-09-23 on a
+        # clean foreign install: `--dry --ctx` while a crystal was SUPPRESSED BY AN ACTIVE BACKOFF and
+        # `--dry --ctx` with a context that matched NOTHING both printed zero bytes and exited 0.
+        # One means "the loop is working and holding its budget"; the other means "nothing here binds
+        # to this act". A tester cannot tell them apart, and the natural reading of silence on a
+        # fresh install is "it is broken" — which is exactly the first hour the starter set exists to
+        # protect. This is the failure this package's own catalogue entry describes
+        # (`a-failed-lookup-must-not-render-as-a-real-zero`), living in the tool that ships it.
+        # ⚠ ONLY the --dry path explains. Live delivery MUST stay silent: backoff is the feature.
+        if args.dry:
+            print(f"[dry] act={act} would fire 0:")
+            try:
+                led = _load()
+                now = time.time()
+                cands = candidates(act, ctx=ctx, target=target, repo=REPO)
+                if not cands:
+                    if not (ctx or "").strip():
+                        print("  no --ctx given, so nothing CAN match: act-bound crystals are selected")
+                        print("  by the TEXT of the act, never by the act name alone.")
+                    else:
+                        print("  NOTHING MATCHED — no crystal binds to this act with this context.")
+                        print("  (this is a real zero, not a suppressed one)")
+                for c in cands:
+                    base = os.path.basename(c.get("path", "")) or "crystal"
+                    seen = int(led.get(f"act-session:{session}:{act}:{base}", 0) or 0)
+                    last = float(led.get(f"act:{act}:{base}", 0) or 0)
+                    wait = BASE_MIN * (BACKOFF_BASE ** seen) * 60
+                    remaining = (last + wait) - now
+                    if seen >= MAX_PER_SESSION:
+                        print(f"  SUPPRESSED {base}: session cap reached ({seen}/{MAX_PER_SESSION})")
+                    elif last and remaining > 0:
+                        print(f"  SUPPRESSED {base}: backoff, {int(remaining // 60)}m"
+                              f"{int(remaining % 60):02d}s remaining")
+                    else:
+                        print(f"  MATCHED but not packed: {base}")
+                if cands:
+                    print("  ⚠ act backoff timestamps are GLOBAL PER REPO — a new CLAUDE_SESSION_ID does")
+                    print("    NOT reset them. Only session delivery COUNTS are per session.")
+            except Exception as e:      # a diagnostic must never be the thing that breaks
+                print(f"  (could not explain the silence: {type(e).__name__})")
         return 0
     header = (f"✦ CRYSTAL — you are about to {act}. "
               f"{'This knowing is' if len(due) == 1 else 'These knowings are'} bound to that act, "
@@ -845,6 +885,53 @@ def _ledger_selftest(check):
         LEDGER, _LEDGER_CACHE = saved, cache
 
 
+def _dry_explains_its_silence_selftest(check):
+    """⛔ SUPPRESSED AND NOTHING-MATCHED MUST NOT RENDER THE SAME.
+
+    Measured 2026-09-23 on a clean foreign install: `--dry --ctx` under an active backoff and
+    `--dry --ctx` with an unmatched context both printed ZERO BYTES and exited 0. One says the loop
+    is healthy and holding its budget; the other says nothing binds here. A tester reads either as
+    "it is broken". ⚠ And the LIVE path must stay silent under backoff — that is the feature, so
+    this asserts BOTH directions or it would license fixing the diagnostic by breaking the product.
+    """
+    import subprocess, tempfile, shutil
+    here = Path(__file__).resolve().parent
+    root = here.parent
+    with tempfile.TemporaryDirectory() as td:
+        dst = Path(td) / "repo"
+        shutil.copytree(root, dst, ignore=shutil.ignore_patterns(".git", "__pycache__", "scratch"))
+        cdir = dst / "memory" / "crystals"
+        cdir.mkdir(parents=True, exist_ok=True)
+        (cdir / "guard-probe.md").write_text(
+            "---\nname: guard-probe\ndescription: selftest probe.\ncrystal:\n  deliver: act\n"
+            "  on: bash\n  match: zzprobe\n  when: act\n  who: all\n  mint_from: self\n"
+            "  minted: 2026-09-23\nmetadata:\n  type: reference\n---\n\n"
+            "<!-- crystal:essence -->\nprobe essence\n<!-- /crystal:essence -->\n")
+
+        def run(ctx, session, dry):
+            cmd = [sys.executable, str(dst / "scripts" / "crystal_act.py"), "--act", "bash", "--ctx", ctx]
+            if dry:
+                cmd.append("--dry")
+            env = dict(os.environ, CLAUDE_SESSION_ID=session)
+            return subprocess.run(cmd, cwd=str(dst), capture_output=True, text=True, env=env).stdout
+
+        run("zzprobe build", "live1", dry=False)                 # consume the budget -> backoff armed
+        suppressed = run("zzprobe build", "live2", dry=True)      # fresh session, still suppressed
+        unmatched = run("qqq nothing binds here", "live3", dry=True)
+        live = run("zzprobe build", "live4", dry=False)
+
+        check("SUPPRESSED" in suppressed,
+              "--dry names an active backoff instead of printing nothing")
+        check("GLOBAL PER REPO" in suppressed,
+              "--dry says the backoff clock is global, at the moment of the confusion")
+        check("NOTHING MATCHED" in unmatched,
+              "--dry distinguishes a real zero from a suppressed one")
+        check(suppressed.strip() != unmatched.strip(),
+              "the two silences are no longer byte-identical")
+        check(live.strip() == "",
+              "the LIVE path is still silent under backoff (backoff is the feature, not a bug)")
+
+
 def selftest():
     import crystal_registry as cr
     global LEDGER
@@ -855,6 +942,7 @@ def selftest():
         ok = ok and bool(c)
 
     _ledger_selftest(check)
+    _dry_explains_its_silence_selftest(check)
 
     cs = [{"path": "/x/a.md", "on": "bash", "essence": "E1", "who": "all"},
           {"path": "/x/b.md", "on": "commit,write", "essence": "E2", "who": "all"},

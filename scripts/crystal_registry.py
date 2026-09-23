@@ -418,8 +418,18 @@ def main():
         for c in crystals:
             print(f"- {c['path']}")
             print(f"    deliver={c.get('deliver')} when={c.get('when','-')} who={c.get('who','all')} mint_from={c.get('mint_from','-')}")
-            if c.get("essence"):
+            state = c.get("essence_state") or ("OK" if c.get("essence") else "MISSING MARKERS")
+            if state == "OK":
                 print(f"    essence: {len(c['essence'].splitlines())} line(s)")
+            else:
+                # ⛔ AN ABSENCE IS NOT A WARNING. This used to print the essence line only when there
+                # WAS one, so a crystal with a valid block and no markers rendered as a normal entry
+                # minus one line — and `list` is the command a tester runs to ask "did it register?".
+                # It registers, it lists, it can never deliver. Say so here, not only in doctor.
+                print(f"    ⛔ UNDELIVERABLE: {state} — registers and lists, but can never fire")
+                print(f"       fix: wrap the text you want delivered in these two lines:")
+                print(f"         {ESSENCE_OPEN}")
+                print(f"         {ESSENCE_CLOSE}")
     elif a.cmd == "emit":
         for c in for_channel(crystals, a.channel, a.who):
             print(c.get("essence", ""))
@@ -539,6 +549,14 @@ def doctor(root, crystals, act, ctx, target, who, session):
     if undeliverable:
         print()
         print("BLOCKED: at least one registered crystal is undeliverable because essence markers are missing or empty")
+        # ⛔ NAMING A DEFECT IS NOT REPAIRING IT. "MISSING MARKERS" is precise and useless to someone
+        # who has never heard of an essence marker — which is every tester in their first hour, and
+        # the most likely author of a hand-written first crystal. Print the two lines they need.
+        print("  the delivered payload is the text BETWEEN these two markers; without them there is")
+        print("  nothing to deliver, so the crystal loads, lists, and stays silent forever:")
+        print(f"    {ESSENCE_OPEN}")
+        print("    ...the knowing you want delivered at the moment of the act...")
+        print(f"    {ESSENCE_CLOSE}")
     if not crystals or undeliverable:
         return 2
     return 0
