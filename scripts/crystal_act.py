@@ -63,7 +63,7 @@ CLAIM_BINDING_ESSENCE = (
     "CLAIM-SHAPED WRITE: pause before this strategy/positioning claim hardens. "
     "Ask: (1) What would FALSIFY this? "
     "(2) Does an existing vision/positioning node already claim something DIFFERENT? "
-    "Check [[VISION-what-we-are-building]]: the extender is the DOOR, not the destination. "
+    "Check VISION-what-we-are-building: the extender is the DOOR, not the destination. "
     "(3) Have you briefed this leg to an adversary, or only the legs you like? "
     "Name the legs you did NOT brief."
 )
@@ -132,19 +132,118 @@ def _claim_shaped_binding(ctx, target=""):
     }]
 
 
+# Counts enforce session airtime/rotation, not historical analytics. Seven days without
+# an act ends that purpose: a resumed older session gets a fresh delivery budget. Touch
+# on EVERY real act (even when capped/silent), so an active capped session never expires.
+# act:* clocks remain global per repo FOREVER; counts remain per CLAUDE_SESSION_ID.
+# Legacy rows have counts only: their age is unknowable. Give them one migration grace
+# week, persisted on the next real act, rather than guessing and resetting live budgets.
+SESSION_IDLE_SECONDS = 7 * 86400
+_LEDGER_CACHE = None
+
+
+def _session_of(key, prefix):
+    """⚠ A session id may contain colons. Split off the PREFIX and the two trailing fields
+    (act, crystal) instead of taking index 1, which loses everything after the first colon."""
+    rest = key[len(prefix):]
+    return rest.rsplit(":", 2)[0] if prefix == "act-session:" else rest
+
+
+LEDGER_SCHEMA_KEY = "_ledger-schema"
+LEDGER_SCHEMA = 2
+
+
+def _migrate_once(led, now):
+    """⛔ ONE-TIME: drop every per-session count that predates the bounded schema.
+
+    WHY A DROP AND NOT A GRACE PERIOD. The first cut stamped undated legacy rows with `now` and gave
+    them a week. Measured on our own live ledger immediately afterwards: 718KB before, 718KB after,
+    0.0% shrink — and worse, the stamp made them indistinguishable from activity, so the shrink moved
+    seven days out while every act kept rewriting the full blob. The tell was decisive: **456 sessions
+    shared one `session-last` value to the microsecond.** Independent acts do not collide like that;
+    that is one migration write wearing 456 dates.
+
+    A dropped count costs at most MAX_PER_SESSION extra deliveries to a session that is genuinely
+    still live, and our cost model says over-delivery is the cheap direction — an outside tester has
+    already been bitten by "I ran it again and nothing happened". Suppression is the expensive one.
+    ⚠ `act:*` clocks are NOT touched here. They are the global backoff and they survive everything.
+    """
+    if led.get(LEDGER_SCHEMA_KEY) == LEDGER_SCHEMA:
+        return led
+    for key in [k for k in led if k.startswith("act-session:") or k.startswith("session-last:")]:
+        del led[key]
+    led[LEDGER_SCHEMA_KEY] = LEDGER_SCHEMA
+    return led
+
+
+def _prune_sessions(led, now):
+    led = _migrate_once(led, now)
+    # ⛔ UNDATED LEGACY ROWS ARE DROPPED, NOT GRACED (Grok review, 2026-09-23, and it was right here).
+    # The first cut stamped them `now` and gave a 7-day grace, which meant NO immediate shrink: every
+    # act rewrote the full 666KB blob for a week while reporting success off an 8-day simulation.
+    # Their age is unrecoverable, so the choice is over-deliver or suppress, and our own cost model
+    # says over-delivery is the cheap direction — an outside tester has already been bitten by
+    # "I ran it again and nothing happened". Dropping them costs at most MAX_PER_SESSION extra
+    # deliveries for a session still live, and buys the shrink on the very first act.
+    dated = {_session_of(k, "session-last:") for k in led if k.startswith("session-last:")}
+    for key in [k for k in led if k.startswith("act-session:")]:
+        if _session_of(key, "act-session:") not in dated:
+            del led[key]
+    sessions = {_session_of(k, "act-session:") for k in led if k.startswith("act-session:")}
+    for session in sessions:
+        led.setdefault(f"session-last:{session}", now)
+    stale = {_session_of(k, "session-last:") for k, v in led.items()
+             if k.startswith("session-last:") and now - v > SESSION_IDLE_SECONDS}
+    for key in list(led):
+        if ((key.startswith("act-session:") and _session_of(key, "act-session:") in stale)
+                or (key.startswith("session-last:") and _session_of(key, "session-last:") in stale)):
+            del led[key]
+    return led
+
+
+def _ledger_signature():
+    stat = LEDGER.stat()
+    return (LEDGER, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+
+
 def _load():
+    global _LEDGER_CACHE
     try:
-        return json.loads(LEDGER.read_text())
+        signature = _ledger_signature()
+        if _LEDGER_CACHE is None or _LEDGER_CACHE[0] != signature:
+            # Parse/prune once per loaded file version in this process. New hook processes
+            # read the compacted file; stat invalidation preserves other writers' clocks.
+            led = _prune_sessions(json.loads(LEDGER.read_text()), time.time())
+            _LEDGER_CACHE = (signature, led)
+        return _LEDGER_CACHE[1].copy()
     except Exception:
         return {}
 
 
 def _save(d):
+    # ⛔ ATOMIC OR NOT AT ALL (Grok review, 2026-09-23). `write_text` TRUNCATES first, so a concurrent
+    # hook process can read a half-written file; `_load` swallows the JSONDecodeError and returns {},
+    # which both over-delivers AND lets the next save write a nearly-empty ledger over a good one.
+    # This path now runs on EVERY act rather than only on delivery, so the torn window went from rare
+    # to routine. os.replace is atomic within a filesystem, which is where the ledger lives.
+    global _LEDGER_CACHE
     try:
         LEDGER.parent.mkdir(parents=True, exist_ok=True)
-        LEDGER.write_text(json.dumps(d))
+        tmp = LEDGER.with_suffix(LEDGER.suffix + f".tmp.{os.getpid()}")
+        tmp.write_text(json.dumps(d))
+        os.replace(tmp, LEDGER)
+        # ⚠ The signature is taken AFTER the replace, so a writer that lands between the replace and
+        # the stat would have us cache THEIR signature against OUR dict. Cheap insurance: if the
+        # signature cannot be read, drop the cache rather than trusting a guess.
+        try:
+            _LEDGER_CACHE = (_ledger_signature(), d.copy())
+        except Exception:
+            _LEDGER_CACHE = None
     except Exception:
-        pass
+        try:
+            tmp.unlink()
+        except Exception:
+            pass
 
 
 def _session_id(payload=None):
@@ -491,10 +590,8 @@ def due_for(act, session, now=None, repo=None, dry=False, ctx="", target="", max
             led[f"act:{act}:{base}"] = now
             led[f"act-session:{session}:{act}:{base}"] = led.get(
                 f"act-session:{session}:{act}:{base}", 0) + 1
-    if out and not dry:
-        # prune timestamps only; session counters are COUNTS, not times
-        led = {k: v for k, v in led.items()
-               if k.startswith("act-session:") or now - v < 86400}
+    if not dry:
+        led[f"session-last:{session}"] = now
         _save(led)
     return out
 
@@ -641,6 +738,113 @@ def main():
     return 0
 
 
+def _ledger_selftest(check):
+    import tempfile
+    from unittest.mock import patch
+    global LEDGER, _LEDGER_CACHE
+    now = 2_000_000_000.0
+    clocks = {"act:bash:a.md": 123.5, "act:write:b.md": now}
+    old = {f"act-session:old{i}:bash:a.md": 3 for i in range(100)}
+    led = {LEDGER_SCHEMA_KEY: LEDGER_SCHEMA, **clocks, **old,
+           **{f"session-last:old{i}": now - 8 * 86400 for i in range(100)},
+           "act-session:fresh:write:b.md": 2, "session-last:fresh": now - 86400,
+           "act-session:edge:bash:a.md": 1, "session-last:edge": now - 7 * 86400}
+    before = led.copy()
+    result = _prune_sessions(led, now)
+    check(all(k in before for k in old) and all(k not in result for k in old),
+          "prune removes 100 planted old sessions that the unpruned ledger retains")
+    check({k: v for k, v in result.items() if k.startswith("act:")} == clocks
+          and json.dumps(clocks) == json.dumps({k: v for k, v in result.items() if k.startswith("act:")}),
+          "global act clocks survive positively, with byte-identical serialized values")
+    check(result.get("act-session:fresh:write:b.md") == 2
+          and result.get("act-session:edge:bash:a.md") == 1,
+          "fresh and exactly-seven-day sessions retain their delivery counts")
+    check(_prune_sessions(result.copy(), now) == result, "pruning is idempotent")
+    # ⇒ POLICY CHANGED 2026-09-23 after the Grok review: undated legacy rows are DROPPED on the
+    #   first prune, not graced for a week. Grace meant no shrink at all until day 8 while every act
+    #   rewrote the full 666KB blob. Age is unrecoverable, so the choice is over-deliver or suppress,
+    #   and over-delivery is the cheap direction here.
+    # THE ONE-TIME MIGRATION, both directions.
+    pre = {"act-session:any:bash:a.md": 3, "session-last:any": now, **clocks}
+    post = _prune_sessions(dict(pre), now)
+    check(not any(k.startswith(("act-session:", "session-last:")) for k in post)
+          and post.get(LEDGER_SCHEMA_KEY) == LEDGER_SCHEMA,
+          "migration drops ALL pre-schema session state and stamps the schema version")
+    check({k: v for k, v in post.items() if k.startswith("act:")} == clocks,
+          "...and the global act clocks survive the migration untouched")
+    post2 = dict(post); post2["act-session:new:bash:a.md"] = 1; post2["session-last:new"] = now
+    check(_prune_sessions(dict(post2), now).get("act-session:new:bash:a.md") == 1,
+          "NEGATIVE CONTROL: once migrated, a fresh session's counts are NOT dropped again")
+    legacy = {"act-session:legacy:bash:a.md": 3, LEDGER_SCHEMA_KEY: LEDGER_SCHEMA, **clocks}
+    migrated = _prune_sessions(legacy, now)
+    check("act-session:legacy:bash:a.md" not in migrated,
+          "undated legacy counts are DROPPED on first prune, so the shrink lands immediately")
+    check({k: v for k, v in migrated.items() if k.startswith("act:")} == clocks,
+          "...and dropping them does not touch the global act clocks")
+    # NEGATIVE CONTROL for that drop: a row WITH a session-last stamp must survive it.
+    kept = _prune_sessions({"act-session:live:bash:a.md": 2, "session-last:live": now,
+                            LEDGER_SCHEMA_KEY: LEDGER_SCHEMA, **clocks}, now)
+    check(kept.get("act-session:live:bash:a.md") == 2,
+          "negative control: a DATED session row survives the legacy drop")
+    # ⚠ A session id may contain colons. Index-1 splitting silently truncated it.
+    colon = {"act-session:host:1234:abc:bash:a.md": 1, "session-last:host:1234:abc": now - 9 * 86400,
+             LEDGER_SCHEMA_KEY: LEDGER_SCHEMA}
+    check(_prune_sessions(colon.copy(), now) == {LEDGER_SCHEMA_KEY: LEDGER_SCHEMA},
+          "a session id containing colons is matched whole and prunes correctly")
+    colon_fresh = {"act-session:host:1234:abc:bash:a.md": 1, "session-last:host:1234:abc": now,
+                   LEDGER_SCHEMA_KEY: LEDGER_SCHEMA}
+    check(_prune_sessions(colon_fresh.copy(), now) == colon_fresh,
+          "negative control: the same colon-bearing id is KEPT while fresh")
+    saved, cache = LEDGER, _LEDGER_CACHE
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            LEDGER = Path(tmp) / "ledger.json"
+            LEDGER.write_text(json.dumps(before))
+            raw = LEDGER.read_bytes()
+            with patch.object(time, "time", return_value=now), patch.object(
+                    json, "loads", wraps=json.loads) as loads:
+                _load()
+                _load()
+                check(loads.call_count == 1, "unchanged ledger is parsed/pruned once per process")
+            check(LEDGER.read_bytes() == raw, "load/prune alone never writes the ledger")
+            # ⛔ ATOMICITY (Grok #2): the ledger must never be observable half-written, and no
+            #    temp file may be left behind. Assert the POSITIVE — it parses after the save.
+            # ⚠ ON ITS OWN FILE. The first cut of this check ran _save against the SHARED fixture
+            #   ledger and replaced it with a two-key dict, so the three due_for checks below read a
+            #   gutted file and failed — a test defect that reads exactly like a code regression.
+            #   Both arms get fresh fixtures; never one from another.
+            _atomic_saved, _atomic_cache = LEDGER, _LEDGER_CACHE
+            try:
+                LEDGER = Path(tmp) / "atomic.json"
+                _LEDGER_CACHE = None
+                _save({"act:bash:z.md": now, "session-last:s": now})
+                check(json.loads(LEDGER.read_text()).get("act:bash:z.md") == now,
+                      "after _save the ledger parses cleanly (atomic replace, never a torn write)")
+                check(not list(LEDGER.parent.glob("atomic.json.tmp.*")),
+                      "_save leaves no .tmp file behind")
+            finally:
+                LEDGER, _LEDGER_CACHE = _atomic_saved, _atomic_cache
+            with patch(__name__ + ".candidates", return_value=[]):
+                due_for("bash", "fresh", now=now, dry=False)
+            stored = json.loads(LEDGER.read_text())
+            check(stored.get("session-last:fresh") == now
+                  and stored.get("act-session:fresh:write:b.md") == 2,
+                  "silent/capped activity refreshes session lifetime without resetting counts")
+            check(all(stored.get(k) == v for k, v in clocks.items())
+                  and all(k not in stored for k in old),
+                  "real silent act persists compaction AND every global backoff clock")
+            with patch(__name__ + ".candidates", return_value=[
+                    {"path": "/x/b.md", "essence": "B"}]):
+                check(not due_for("write", "brand-new-session", now=now + 1, dry=True),
+                      "a new session is still throttled by another session's global clock")
+            stored["act:bash:external.md"] = now
+            LEDGER.write_text(json.dumps(stored))
+            check(_load().get("act:bash:external.md") == now,
+                  "external writes invalidate cache so global backoff remains visible")
+    finally:
+        LEDGER, _LEDGER_CACHE = saved, cache
+
+
 def selftest():
     import crystal_registry as cr
     global LEDGER
@@ -649,6 +853,8 @@ def selftest():
         nonlocal ok
         print(("  [PASS] " if c else "  [FAIL] ") + label)
         ok = ok and bool(c)
+
+    _ledger_selftest(check)
 
     cs = [{"path": "/x/a.md", "on": "bash", "essence": "E1", "who": "all"},
           {"path": "/x/b.md", "on": "commit,write", "essence": "E2", "who": "all"},
