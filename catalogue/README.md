@@ -61,6 +61,7 @@ families below are the other door, and the gap is worth telling us about.
 
 | Symptom | Family | Entry |
 | --- | --- | --- |
+| My check fails and I am sure the fix is wrong | B | [a-check-written-with-the-code-inherits-its-assumptions](a-check-written-with-the-code-inherits-its-assumptions.md) |
 | My before and after look identical, so the change did nothing | B | [a-control-built-from-the-treated-arm-is-not-a-control](a-control-built-from-the-treated-arm-is-not-a-control.md) |
 | I checked the judge on an example and it was fine, so the null must be real | B | [one-calibration-pair-is-a-smoke-test-not-a-validation](one-calibration-pair-is-a-smoke-test-not-a-validation.md) |
 | My immutability test passes and the operation still edits the caller's copy | B | [testing-rejection-is-not-testing-immutability](testing-rejection-is-not-testing-immutability.md) |
