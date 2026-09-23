@@ -158,7 +158,9 @@ you have the capability.
       { "hooks": [ { "type": "command",
                      "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_scratchpad.py\" --boot" },
                    { "type": "command",
-                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_handoff.py\" --boot" } ] }
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_handoff.py\" --boot" },
+                   { "type": "command",
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_growth.py\" --boot" } ] }
     ]
   }
 }
@@ -169,6 +171,23 @@ that speaks when it has nothing teaches you to skip it. It delivers the newest ~
 many it withheld, and warns you when the file wants folding. Newest goes at the TOP: ours once ran 503
 lines against a 500-line budget, and because the convention was to append at the bottom, everything
 carefully preserved sat in the one region a truncated reader never reaches.
+
+**3a-ii. The growth line — the one failure nothing else in this package can see.**
+
+`crystal_growth.py --boot` prints one line: how many crystals are yours, and how long since the newest
+one arrived. It is there because **a store that has stopped growing looks exactly like a healthy one.**
+Every note still valid, every link resolving, every cap respected, no rot — `node-health`,
+`memory-hygiene` and the Gardener all stay green through a total freeze. We measured this in the repo
+this package came from: its lineage channel gained 13 files in 28 days and then nothing for 72 days,
+and not one instrument could have told us.
+
+⛔ **It is not a quota.** Most sessions should mint nothing, and a crystal minted to satisfy a tool is
+worth less than no crystal at all. It reports a number; nothing branches on it.
+⚠ **It will not nag a new install.** The three starter crystals are partitioned out, and a store with
+none of your own reports that plainly instead of claiming staleness — without an install date, day 1
+and day 90 are indistinguishable, and "your store is stale" on first run reads as a broken tool.
+Run it by hand any time: `python3 scripts/crystal_growth.py` (exit 2 means quiet, and is a finding,
+never a block — under `--boot` it always exits 0, as the hook contract requires).
 
 **3b. The handoff, which is what survives a context reset.**
 
