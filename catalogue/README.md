@@ -38,11 +38,14 @@ families below are the other door, and the gap is worth telling us about.
 
 - `a-generated-document-is-unverified-until-you-render-it` — a CSS or browser layout complaint (grid, Safari, responsive) - the spacing sentence reads as UI-domain and pulled an out-of-domain symptom here in a blind run, 2026-09-22
 
-⚠ **3 of 12 entries have no arrival sentence at all.** They are reachable only from the symptom tables below, which means reachable only by someone who already suspects the mechanism. Published rather than papered over, because a sentence invented to fill the gap would recreate the exact defect this section was built to fix:
+⚠ **6 of 15 entries have no arrival sentence at all.** They are reachable only from the symptom tables below, which means reachable only by someone who already suspects the mechanism. Published rather than papered over, because a sentence invented to fill the gap would recreate the exact defect this section was built to fix:
 
 - `a-surviving-mutant-can-mean-the-code-is-dead`
 - `a-control-built-from-the-treated-arm-is-not-a-control`
+- `one-calibration-pair-is-a-smoke-test-not-a-validation`
 - `testing-rejection-is-not-testing-immutability`
+- `a-benchmark-arm-is-its-candidate-pool`
+- `a-failed-lookup-must-not-render-as-a-real-zero`
 
 ## Symptom index — the instrument-side names for the same failures
 
@@ -59,12 +62,15 @@ families below are the other door, and the gap is worth telling us about.
 | Symptom | Family | Entry |
 | --- | --- | --- |
 | My before and after look identical, so the change did nothing | B | [a-control-built-from-the-treated-arm-is-not-a-control](a-control-built-from-the-treated-arm-is-not-a-control.md) |
+| I checked the judge on an example and it was fine, so the null must be real | B | [one-calibration-pair-is-a-smoke-test-not-a-validation](one-calibration-pair-is-a-smoke-test-not-a-validation.md) |
 | My immutability test passes and the operation still edits the caller's copy | B | [testing-rejection-is-not-testing-immutability](testing-rejection-is-not-testing-immutability.md) |
 
 ## Family C
 
 | Symptom | Family | Entry |
 | --- | --- | --- |
+| Two configurations are being compared and I cannot say what is different between them | C | [a-benchmark-arm-is-its-candidate-pool](a-benchmark-arm-is-its-candidate-pool.md) |
+| I got a clean zero and it is telling me to abandon the work | C | [a-failed-lookup-must-not-render-as-a-real-zero](a-failed-lookup-must-not-render-as-a-real-zero.md) |
 | I turned the sampling rate all the way up and almost nothing was sampled | C | [a-rate-knob-cannot-fix-a-denominator](a-rate-knob-cannot-fix-a-denominator.md) |
 | My benchmark ranking flipped between two identical runs | C | [a-single-run-ranking-is-noise-even-at-temp-zero](a-single-run-ranking-is-noise-even-at-temp-zero.md) |
 | Two tools share the same rule and give me different answers | C | [an-instrument-that-answers-a-different-question-can-be-wrong-two-ways](an-instrument-that-answers-a-different-question-can-be-wrong-two-ways.md) |
