@@ -38,6 +38,14 @@ context that must match one of them** so you see the loop fire before you believ
 your hook config; it prints the hooks for you to paste. A second run overwrites nothing and says what
 it skipped.
 
+**To take a newer version later:** `sh "$CRYSTALS/install.sh" --upgrade`. It replaces only the
+package's own scripts, only where yours differ, and copies each one it replaces into
+`scratch/crystal-upgrade-backup/<stamp>/` first (the run prints the one-line rollback). Your crystals,
+scratchpad and handoffs are never touched. Without it, a fix to a package script never reached an
+existing install: the plain run skips anything already there, which is right the first time and wrong
+every time after. `sh "$CRYSTALS/install.sh" --selftest` proves install, re-install and upgrade on a
+throwaway repo, including running every hook command it prints.
+
 The rest of this page is the same install done by hand, plus everything the one command does not do.
 
 ---
@@ -51,7 +59,7 @@ clone** and it is not copied into your repo, which is why the tree below shows f
 
 ```
 your-repo/
-  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal_handoff.py  crystal-discriminators.py  librarian.py node-cleaner.py soul-gardener.py node-corrector.py store_contract.py build-node-index.py memory-hygiene.py store_caps.py node-health.py store_policy.py install_layout.py check-store-departures.py  redact.py
+  scripts/       crystal_act.py  crystal_registry.py  crystallize-stop-hook.py  crystal_inject.py  crystal_scratchpad.py  crystal_handoff.py  crystal_growth.py  crystal_midflight.py  crystal_uncommitted.py  crystal-discriminators.py  librarian.py node-cleaner.py soul-gardener.py node-corrector.py store_contract.py build-node-index.py memory-hygiene.py store_caps.py node-health.py store_policy.py install_layout.py check-store-departures.py  redact.py
   memory/        your crystals live here, as .md files, at any depth
   scratch/       the delivery ledger (backoff + per-session counts)
 ```
@@ -104,7 +112,8 @@ The act-bound channel described in this document needs only `crystal_act.py` and
 ```sh
 mkdir -p scripts memory scratch
 for f in crystal_act.py crystal_registry.py crystallize-stop-hook.py crystal_inject.py \
-         crystal_scratchpad.py crystal_handoff.py crystal-discriminators.py; do
+         crystal_scratchpad.py crystal_handoff.py crystal_growth.py crystal_midflight.py \
+         crystal_uncommitted.py crystal-discriminators.py redact.py; do
   cp "$CRYSTALS/scripts/$f" scripts/
 done
 ```
@@ -160,7 +169,15 @@ you have the capability.
                    { "type": "command",
                      "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_handoff.py\" --boot" },
                    { "type": "command",
-                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_growth.py\" --boot" } ] }
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_growth.py\" --boot" },
+                   { "type": "command",
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_midflight.py\" --boot" },
+                   { "type": "command",
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_uncommitted.py\" --boot" } ] }
+    ],
+    "PreCompact": [
+      { "hooks": [ { "type": "command",
+                     "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/crystal_midflight.py\" --capture" } ] }
     ]
   }
 }
@@ -219,6 +236,34 @@ prompt and stays unanswered until somebody answers it.
 not announce itself, or you learn to skip the channel. And the boot delivery is deliberately narrow —
 the pointer, the next action, what is blocked — never the whole document, because the scratchpad
 already speaks on that channel and a second one that dumps a page starves the first.
+
+**3c. Mid-flight: what a compaction loses.**
+
+A long session is eventually compacted: the harness swaps the conversation for a summary. The summary
+keeps the work and paraphrases the decisions. It loses three things, and each one costs you:
+**your own recent words** (a correction sent while the agent was mid-task is the one most often
+dropped), **what was in flight** (a background job started before the compaction finishes into
+silence, or gets started twice), and **open loops** (unchecked items, and commits made but never pushed).
+
+`crystal_midflight.py --capture`, on the `PreCompact` hook above, reads the hook payload's
+`transcript_path` and writes `memory/mid-flight.md`: your last 12 messages verbatim (mid-turn ones
+included, harness text excluded), background output touched in the last 6 hours, unchecked `- [ ]`
+items in notes edited today, unpushed commits, and git state. `--boot` delivers it at the next
+`SessionStart` while it is under 24 hours old, and is silent otherwise.
+⛔ **A capture nothing at boot delivers is not a capture**, which is why it owns its own boot line
+instead of writing into the scratchpad. Credential-shaped strings are redacted before the file is
+written. `CRYSTAL_INFLIGHT_PATTERNS="pytest,npm run build"` adds processes to report as running.
+
+**3d. Possibly lost work.**
+
+`crystal_uncommitted.py --boot` sorts `git status` into four buckets: **generated** (logs, jsonl,
+`scratch/`, or a note whose only change is the Librarian's backlinks block), **held** (named in the
+newest handoff or the scratchpad), **recent** (under 12 hours old), and **lost**: hand-written, older
+than 12 hours, named nowhere. It speaks only when something is lost, and lists it.
+⚠ It exists because the repo this came from printed its uncommitted files at boot as "a decision, not
+drift", and that framing let hand-written work sit uncommitted for weeks. **A file is a decision only
+where something names it.** It never commits, stashes or deletes. Declare your own regenerable paths
+with `CRYSTAL_GENERATED_PREFIXES="build/,site/"`.
 
 **4. Seed the starter set.**
 
@@ -417,7 +462,8 @@ Remove the hook entry from `.claude/settings.json`, and delivery stops immediate
 
 ```sh
 rm scripts/crystal_act.py scripts/crystal_registry.py \
-   scripts/crystallize-stop-hook.py scripts/crystal_inject.py
+   scripts/crystallize-stop-hook.py scripts/crystal_inject.py \
+   scripts/crystal_midflight.py scripts/crystal_uncommitted.py
 rm -rf scratch/.act-ledger.json scratch/.inject-ledger.json
 ```
 

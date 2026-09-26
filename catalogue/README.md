@@ -38,8 +38,9 @@ families below are the other door, and the gap is worth telling us about.
 
 - `a-generated-document-is-unverified-until-you-render-it` — a CSS or browser layout complaint (grid, Safari, responsive) - the spacing sentence reads as UI-domain and pulled an out-of-domain symptom here in a blind run, 2026-09-22
 
-⚠ **10 of 19 entries have no arrival sentence at all.** They are reachable only from the symptom tables below, which means reachable only by someone who already suspects the mechanism. Published rather than papered over, because a sentence invented to fill the gap would recreate the exact defect this section was built to fix:
+⚠ **12 of 21 entries have no arrival sentence at all.** They are reachable only from the symptom tables below, which means reachable only by someone who already suspects the mechanism. Published rather than papered over, because a sentence invented to fill the gap would recreate the exact defect this section was built to fix:
 
+- `a-pointer-nothing-at-boot-follows-is-not-delivered`
 - `a-surviving-mutant-can-mean-the-code-is-dead`
 - `no-expected-duration-means-no-silence-looks-wrong`
 - `a-check-written-with-the-code-inherits-its-assumptions`
@@ -48,6 +49,7 @@ families below are the other door, and the gap is worth telling us about.
 - `testing-rejection-is-not-testing-immutability`
 - `a-benchmark-arm-is-its-candidate-pool`
 - `a-failed-lookup-must-not-render-as-a-real-zero`
+- `a-quote-in-their-text-is-not-a-quote-they-said-first`
 - `the-installed-version-is-not-the-running-one`
 - `a-status-field-is-a-claim-about-the-world-not-an-observation`
 
@@ -59,6 +61,7 @@ families below are the other door, and the gap is worth telling us about.
 | --- | --- | --- |
 | The whole suite is green and the shipped binary draws an empty box | A | [a-component-that-needs-starting-passes-every-behaviour-test](a-component-that-needs-starting-passes-every-behaviour-test.md) |
 | A guard has never fired and I assume that means things are fine | A | [a-guard-keyed-on-a-field-nobody-fills-is-a-silent-no-op](a-guard-keyed-on-a-field-nobody-fills-is-a-silent-no-op.md) |
+| The detail is in the handoff and the next session never read it | A | [a-pointer-nothing-at-boot-follows-is-not-delivered](a-pointer-nothing-at-boot-follows-is-not-delivered.md) |
 | I deleted the code on purpose and the test still passed | A | [a-surviving-mutant-can-mean-the-code-is-dead](a-surviving-mutant-can-mean-the-code-is-dead.md) |
 | The output is still empty, so the background job must still be working | A | [no-expected-duration-means-no-silence-looks-wrong](no-expected-duration-means-no-silence-looks-wrong.md) |
 
@@ -77,6 +80,7 @@ families below are the other door, and the gap is worth telling us about.
 | --- | --- | --- |
 | Two configurations are being compared and I cannot say what is different between them | C | [a-benchmark-arm-is-its-candidate-pool](a-benchmark-arm-is-its-candidate-pool.md) |
 | I got a clean zero and it is telling me to abandon the work | C | [a-failed-lookup-must-not-render-as-a-real-zero](a-failed-lookup-must-not-render-as-a-real-zero.md) |
+| The quote is in their comment and it was not theirs | C | [a-quote-in-their-text-is-not-a-quote-they-said-first](a-quote-in-their-text-is-not-a-quote-they-said-first.md) |
 | I turned the sampling rate all the way up and almost nothing was sampled | C | [a-rate-knob-cannot-fix-a-denominator](a-rate-knob-cannot-fix-a-denominator.md) |
 | My benchmark ranking flipped between two identical runs | C | [a-single-run-ranking-is-noise-even-at-temp-zero](a-single-run-ranking-is-noise-even-at-temp-zero.md) |
 | Two tools share the same rule and give me different answers | C | [an-instrument-that-answers-a-different-question-can-be-wrong-two-ways](an-instrument-that-answers-a-different-question-can-be-wrong-two-ways.md) |
