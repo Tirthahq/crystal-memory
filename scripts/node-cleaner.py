@@ -266,7 +266,38 @@ def retire(targets, apply):
         moves.append((ap, new_abs)); moved_map[ap] = new_abs
     rewrites = compute_rewrites(moved_map, sources)
     wikis = inbound_wikilinks(list(moved_map), sources)
-    return run(moves, rewrites, wikis, apply, "RETIRE → _archive (out of index)", expect_index=False)
+    result = run(moves, rewrites, wikis, apply, "RETIRE → _archive (out of index)", expect_index=False)
+    # 2026-09-22: a departure with no recorded reason is invisible forever. 375 nodes had already left
+    # this store with nothing written down about why -- the Cleaner moved them and said nothing, and a
+    # store that drops the wrong thing looks exactly like a healthy one. Record the WHY at the moment
+    # of the move. Failing to record must NOT break a retire (that would be worse), but it must be
+    # LOUD, because a silent recorder is how we got the 375.
+    if apply and moves:
+        _record_departures([new_abs for _, new_abs in moves])
+    return result
+
+
+def _record_departures(new_paths, why=None, by="node-cleaner"):
+    """Append one row per retired node to the departures ledger. Loud on failure, never fatal."""
+    import subprocess as _sp
+    # ⚠ NOT via REPO: it is None at module level here and only bound later, so touching it outside a
+    # try would crash a retire rather than merely fail to log. The script's own location always works.
+    _here = os.path.dirname(os.path.abspath(__file__))
+    _root = os.path.dirname(_here)
+    rec = os.path.join(_here, "check-store-departures.py")
+    if not os.path.exists(rec):
+        print("  ⚠ departures ledger NOT written: check-store-departures.py is missing")
+        return
+    why = why or "retired by node-cleaner: explicitly named dead or superseded"
+    for ap in new_paths:
+        rel = os.path.relpath(ap, _root)
+        try:
+            r = _sp.run([sys.executable, rec, "--record", "--path", rel, "--why", why, "--by", by],
+                        capture_output=True, text=True, timeout=20)
+            if r.returncode != 0:
+                print(f"  ⚠ departures ledger NOT written for {rel}: {(r.stderr or '').strip()[:120]}")
+        except Exception as exc:
+            print(f"  ⚠ departures ledger NOT written for {rel}: {type(exc).__name__}")
 
 
 def consolidate(apply, limit=None):

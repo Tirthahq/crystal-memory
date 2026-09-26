@@ -2,7 +2,7 @@
 """
 check-store-departures.py — WHAT LEFT THE STORE, WHEN, AND WHY.
 
-⛔ WHY THIS EXISTS (Tom, 2026-09-22, after we lost a box to an unbounded cache):
+⛔ WHY THIS EXISTS (the maintainer, 2026-09-22, after we lost a box to an unbounded cache):
 *"been thinking about the eviction policy because that is the key to staying present"* — and then
 *"make it observable then, what left and why."*
 

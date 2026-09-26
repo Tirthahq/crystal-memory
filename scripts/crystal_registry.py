@@ -573,7 +573,23 @@ if __name__ == "__main__":
 DELIVERY_LOG = os.path.join(REPO, "memory", "corpus", "crystal-deliveries.jsonl")
 
 
-def record_delivery(channel, path, score=None, event=None, act=None, session=None):
+ARRIVAL_EXCLUDED_PREFIX = "displaced"
+
+
+def is_arrival(rec):
+    """True when this row is a crystal that REACHED a reader.
+
+    ⛔ ONE PREDICATE, because four readers counted every row in the log and would each have silently
+    inflated the moment displacement rows were added (crystal-landing, crystal-telemetry,
+    knowledge-pipeline-status, replay-feasibility — measured 2026-09-24 before the rows existed).
+    ⚠ A shared rule does NOT share a population (crystal-an-instrument-that-answers-is-anyone-waiting
+    -can-be-wrong-two-ways): each caller still decides WHICH rows it walks. This only settles what
+    counts as an arrival once a row is in hand.
+    """
+    return not str((rec or {}).get("event") or "").startswith(ARRIVAL_EXCLUDED_PREFIX)
+
+
+def record_delivery(channel, path, score=None, event=None, act=None, session=None, detail=None):
     try:
         # json is NOT a module-level import here (this file stays dep-thin for soul-boot), so import it
         # locally. First draft assumed it was in scope: NameError -> swallowed by the fail-open -> an
@@ -589,6 +605,10 @@ def record_delivery(channel, path, score=None, event=None, act=None, session=Non
                                 # UNSET under the hooks, so env-only made every row "unknown"
                                 # and the join key could never populate. Caller passes it.
                                 "session": session or os.environ.get("CLAUDE_SESSION_ID") or "unknown",
-                                **({"act": act} if act is not None else {})}) + "\n")
+                                **({"act": act} if act is not None else {}),
+                                # `detail` distinguishes full / head / starved. Heads used to log as
+                                # ordinary arrivals, so even the arrival series could not tell a whole
+                                # knowing from a truncated one (Grok, 2026-09-24).
+                                **({"detail": detail} if detail is not None else {})}) + "\n")
     except Exception:
         pass    # telemetry must never cost a delivery

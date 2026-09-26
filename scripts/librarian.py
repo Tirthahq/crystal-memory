@@ -241,7 +241,7 @@ def cmd_guard(staged):
             if check_links:
                 for link in nh.LINK_RE.findall(line):
                     t = link.strip().lower()
-                    if t in nh.PLACEHOLDERS or "\\" in t or "'" in t:
+                    if nh.is_placeholder(t) or "\\" in t or "'" in t:
                         continue
                     if t not in resolvable:
                         new_dangling.append((rel, link.strip()))
@@ -396,7 +396,23 @@ def cmd_tombstone(ack_current):
     return 0
 
 
-def cmd_run():
+# ⛔ A DAILY PASS'S EXIT CODE MUST MEAN "DID THE PASS RUN", NOT "IS THE WORLD TIDY".
+# Until 2026-09-24 `cmd_run()` returned `cmd_status()`'s code, and cmd_status returns non-zero
+# whenever the catalog has ANY rot — which it always does. So launchd recorded
+# `<librarian job>  status 1` every single day while the log ended
+# "=== LIBRARIAN run complete ===", and state-snapshot carried a permanent
+# "launchd jobs reporting non-zero" warning. A red light that can never go green is not a signal;
+# it is the thing that teaches an operator to stop reading the lights.
+# ⇒ the pass exits 0 when it RAN. Rot is reported in the output, where it always was, and the
+# rot-gated exit is still available to a caller that wants it: `librarian.py run --strict`.
+def run_exit_code(ran: bool, rot_rc: int, strict: bool) -> int:
+    """The daily pass's contract, as one pure function so it can be tested without a real run."""
+    if not ran:
+        return 1                       # a step raised: the pass genuinely did not complete
+    return int(rot_rc or 0) if strict else 0
+
+
+def cmd_run(strict: bool = False):
     print("=== LIBRARIAN run ===")
     print("\n[1/5] catalog health")
     status = cmd_status()
@@ -420,7 +436,58 @@ def cmd_run():
     except Exception as e:
         raise ContractError(f"librarian run: semantic refresh failed: {e}") from e
     print("=== LIBRARIAN run complete ===")
-    return status
+    if status and not strict:
+        print("   (rot found and reported above; exiting 0 because the PASS completed — "
+              "`librarian.py run --strict` to gate the exit code on rot instead)")
+    return run_exit_code(ran=True, rot_rc=status, strict=strict)
+
+
+def _selftest() -> int:
+    """Controls for the daily pass's exit contract. MUTATION: make run_exit_code return `rot_rc`
+    unconditionally (the pre-fix behaviour) -> the two non-strict rows go red."""
+    ok = True
+    def c(cond, label):
+        nonlocal ok
+        print(("  [PASS] " if cond else "  [FAIL] ") + label); ok = ok and bool(cond)
+    c(run_exit_code(ran=True, rot_rc=0, strict=False) == 0, "a clean completed pass exits 0")
+    c(run_exit_code(ran=True, rot_rc=1, strict=False) == 0,
+      "a COMPLETED pass that found rot still exits 0 — the code means 'did it run'")
+    c(run_exit_code(ran=False, rot_rc=0, strict=False) == 1,
+      "a pass that did NOT complete exits 1, even with no rot")
+    c(run_exit_code(ran=True, rot_rc=1, strict=True) == 1,
+      "--strict restores the old rot-gated exit for a caller that wants it")
+    c(run_exit_code(ran=True, rot_rc=0, strict=True) == 0, "--strict with no rot is still 0")
+
+    # ⛔ THE WALL AND THE REPORT MUST READ THE SAME TOMBSTONE FILE. They did not, from whenever
+    # store_contract began rebinding TOMBSTONE_FILE until 2026-09-25: the report read the
+    # maintained 153-entry list and the commit gate read a near-empty one, so every acknowledgement
+    # was invisible to the wall. MUTATION: restore the second literal in store_contract.health()
+    # (`self.memory_dir / "librarian-tombstones.txt"`) and this row goes red.
+    import importlib.util as _iu, os as _os
+    _sp = _iu.spec_from_file_location("_nh_direct", _os.path.join(REPO, "scripts", "node-health.py"))
+    _direct = _iu.module_from_spec(_sp); _sp.loader.exec_module(_direct)
+    _gate = contract.health("librarian selftest")
+    c(_os.path.realpath(_direct.TOMBSTONE_FILE) == _os.path.realpath(_gate.TOMBSTONE_FILE),
+      "the commit gate and the standalone report read the SAME tombstone file")
+    c(_direct.load_tombstones()[1] == _gate.load_tombstones()[1],
+      "and therefore agree on which links are acknowledged")
+
+    # ⛔ AND THEY MUST SCAN THE SAME POPULATION AND RESOLVE THE SAME TARGETS. Until 2026-09-25 the
+    # contract's archived_files() saw 3 of 251 archived nodes (a non-recursive glob one level under a
+    # population folder), so 248 real files were unresolvable and `librarian status` reported 55
+    # dangling links that all pointed at files that exist — while standalone node-health reported 0.
+    # It also omitted all five ROOT_DOCS, so the commit gate never checked CLAUDE.md's own links.
+    # MUTATION: restore either narrower lambda in store_contract.health() and these rows go red.
+    _rp = _os.path.realpath
+    c({_rp(f) for f in _direct.node_files()} == {_rp(f) for f in _gate.node_files()},
+      "the gate and the report scan the SAME node population")
+    c({_rp(f) for f in _direct.archived_files()} == {_rp(f) for f in _gate.archived_files()},
+      "and see the SAME archived files (archived nodes are resolvable link targets)")
+    c(_direct.build_resolvable(_direct.node_files()) == _gate.build_resolvable(_gate.node_files()),
+      "and therefore resolve the SAME link targets")
+
+    print("  == librarian exit-contract selftest:", "PASS" if ok else "FAIL")
+    return 0 if ok else 1
 
 
 def main():
@@ -435,7 +502,11 @@ def main():
     pt.add_argument("--prune", action="store_true",
                     help="drop acknowledgements whose target now resolves/exists (they are live gate holes)")
     pt.add_argument("--apply", action="store_true", help="with --prune: actually rewrite the tombstone")
-    sub.add_parser("run")
+    prun = sub.add_parser("run")
+    prun.add_argument("--strict", action="store_true",
+                      help="gate the exit code on ROT as well as on completion (the pre-2026-09-24 "
+                           "behaviour, which made the launchd job permanently red)")
+    sub.add_parser("selftest")
     a = ap.parse_args()
     global contract, nh, REPO, COMMAND
     COMMAND = f"librarian {a.cmd}"
@@ -458,7 +529,9 @@ def main():
     elif a.cmd == "tombstone":
         sys.exit(cmd_tombstone_prune(a.apply) if a.prune else cmd_tombstone(a.ack_current))
     elif a.cmd == "run":
-        sys.exit(cmd_run())
+        sys.exit(cmd_run(strict=getattr(a, "strict", False)))
+    if a.cmd == "selftest":
+        sys.exit(_selftest())
 
 
 if __name__ == "__main__":

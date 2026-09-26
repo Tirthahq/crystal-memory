@@ -169,14 +169,34 @@ class StoreContract:
     def health(self, command):
         module = self.load_script("node-health.py", command)
         module.REPO = str(self.root)
-        module.TOMBSTONE_FILE = str(self.memory_dir / "librarian-tombstones.txt")
+        # Derive from node-health's own relative path, never a second literal — see the note
+        # on TOMBSTONE_REL there for what two literals cost (2026-09-25).
+        module.TOMBSTONE_FILE = str(self.root / module.TOMBSTONE_REL)
         # Scanning rules stay in node-health; only its input population is bound here.
+        # ⚠ ROOT_DOCS are part of the population node-health checks, and the commit gate was blind
+        # to all five — including CLAUDE.md, the constitution, where a broken sign costs the most.
+        # A store that does not have them simply contributes none (the safe direction for a reporter).
         module.node_files = lambda: [str(p) for p in self.node_files(recursive=True)
                                     if not any(s in str(p.relative_to(self.root)) for s in module.SKIP)
-                                    and not p.name.endswith("NODE-INDEX.md")]
-        module.archived_files = lambda: [str(p) for d in self.population()
-                                        for name in ("archive", "_archive")
-                                        for p in (d / name).glob("*.md") if p.is_file()]
+                                    and not p.name.endswith("NODE-INDEX.md")] + [
+            str(self.root / f) for f in module.ROOT_DOCS if (self.root / f).exists()]
+        # ⛔ ARCHIVED NODES ARE RESOLVABLE LINK TARGETS, AND THIS LAMBDA COULD SEE 3 OF 251.
+        # It globbed `<population folder>/{archive,_archive}/*.md` — non-recursive, and only for a
+        # folder literally one level under a population folder. So `memory/_archive/reviews/`,
+        # `memory/ops/artifacts/_archive/` and six more were invisible, leaving 248 real, existing
+        # nodes unresolvable. Everything reading the store through this contract then reported ~55
+        # dangling links that all point at files that exist: `librarian status` said 55 where
+        # standalone node-health said 0.
+        #
+        # ⚠ THIS IS THE THIRD TIME THIS EXACT BUG HAS BEEN PAID FOR. node-health's own comment
+        # records it from 2026-08-10 ("19 permanently-red dangling links ... the resolver could not
+        # see the folder") and its verdict applies here: A PERMANENTLY-RED CHECK IS WORSE THAN NO
+        # CHECK, because it trains every session to skim the boot surface.
+        # ⇒ Reuse node-health's OWN rule — a recursive walk filtered by its archived_dirs() policy —
+        # rather than a second, narrower re-implementation of "what counts as archived".
+        module.archived_files = lambda: sorted(
+            str(p) for p in self.memory_dir.glob("**/*.md")
+            if any(a in p.relative_to(self.root).as_posix() for a in module.archived_dirs()))
         return module
 
     def run_script(self, name, command, *args, required=True):

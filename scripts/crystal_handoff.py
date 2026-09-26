@@ -200,6 +200,16 @@ def boot_text(repo=None, limit=BOOT_LINES):
     lines = "\n".join(out).splitlines()
     if len(lines) > limit:
         lines = lines[:limit] + ["", "… truncated. Open %s." % rel]
+    # ⛔ A POINTER THAT NOTHING AT BOOT FOLLOWS IS NOT DELIVERED. "Next action: finish what
+    # [[the-plan]] describes" arrived as bare text, so the one line this channel exists to deliver
+    # pointed at content no boot reader opened. Follow each pointer in the DELIVERED lines one step,
+    # with the same rule the scratchpad uses (one owner). Fails open: a missing helper or a bad
+    # store must never silence the handoff itself.
+    try:
+        import crystal_scratchpad
+        lines += crystal_scratchpad.expand_links(lines, repo)
+    except Exception:
+        pass
     return "\n".join(lines)
 
 
@@ -290,6 +300,25 @@ def selftest():
     open(p2, "w").write(long_body)
     t = boot_text(d)
     check("a long handoff is truncated, not dumped", len(t.splitlines()) <= BOOT_LINES + 2)
+
+    # ⛔ A POINTER IN THE DELIVERED NEXT ACTION MUST ARRIVE FOLLOWED, or the one line this channel
+    # exists to carry points at content nobody at boot opens.
+    # MUTATION: drop the expand_links call from boot_text and the first row goes red.
+    os.makedirs(os.path.join(d, "memory", "plans"), exist_ok=True)
+    with open(os.path.join(d, "memory", "plans", "the-migration-plan.md"), "w") as fh:
+        fh.write("---\nname: the-migration-plan\n"
+                 "description: move the ledger to sqlite in three steps; step two is the risky one\n"
+                 "---\n\nbody\n")
+    p3 = new(repo=d, stamp="2026-01-02")
+    body3 = open(p3).read().replace(          # read BEFORE opening for write, which truncates
+        UNANSWERED + " one line. What would you start if you opened this cold in the morning?",
+        "start step two of [[the-migration-plan]]")
+    open(p3, "w").write(body3)
+    t = boot_text(d)
+    check("a [[pointer]] in the delivered next action arrives FOLLOWED (its description is delivered)",
+          "step two is the risky one" in t)
+    check("and the pointer itself is still there, so the reader can open the file",
+          "[[the-migration-plan]]" in t)
 
     print("SELFTEST PASS" if ok else "SELFTEST FAILED")
     return 0 if ok else 1

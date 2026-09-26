@@ -31,6 +31,19 @@ PATH_RE = re.compile(r"`([A-Za-z0-9_./-]+\.(?:py|js|ts|jsx|tsx|sh|ps1|md|json|js
 NAME_RE = re.compile(r"^name:\s*(.+?)\s*$", re.M)
 VERIFIED_RE = re.compile(r"^last_verified:\s*(\d{4}-\d{2}-\d{2})", re.M)
 PLACEHOLDERS = {"link", "links", "old", "slug", "name", "old-node", "their-name"}
+
+
+def is_placeholder(target):
+    """A link target that cannot be a node name: a known placeholder, or ANY metavariable.
+
+    ⛔ `[[<name>]]`, `[[<slug>]]` etc. are metavariables by construction — the angle brackets ARE
+    the notation for "substitute something here". Enumerating them one by one never converges:
+    the list already held `name`, and a reviewer wrote `<name>` in archived prose and blocked a
+    commit that had nothing to do with linking. Match the NOTATION, not the vocabulary.
+    (2026-09-25 — second time a literal bracket in quoted text blocked an unrelated commit.)
+    """
+    t = (target or "").strip().lower()
+    return t in PLACEHOLDERS or (t.startswith("<") and t.endswith(">"))
 # ⛔ SCOPE MUST MATCH build-node-index.py EXACTLY (else the scanners disagree on what's "live" — the
 # 2026-06-14 reconciliation bug). It used to say "KEEP IN SYNC WITH build-node-index.py SKIP", which is
 # a comment, not a mechanism: two copies of one rule, and `store_caps.py`'s own docstring is a record of
@@ -47,7 +60,7 @@ def node_files():
     seen = set()
     for f in glob.glob(os.path.join(REPO, "memory", "**", "*.md"), recursive=True):
         seen.add(f)
-    for f in ("CLAUDE.md", "RECOVERY.md", "DESIGN.md", "PIPELINE.md", "goodmorning.md"):
+    for f in ROOT_DOCS:
         p = os.path.join(REPO, f)
         if os.path.exists(p):
             seen.add(p)
@@ -129,7 +142,7 @@ def scan(check_files, resolvable, today, stale_days):
         if "wiki/schema" not in rel:  # skip the file that documents the [[ ]] convention by example
             for link in set(LINK_RE.findall(txt)):
                 t = link.strip().lower()
-                if t in PLACEHOLDERS or "\\" in t or "'" in t:
+                if is_placeholder(t) or "\\" in t or "'" in t:
                     continue
                 if t not in resolvable:
                     dangling.append((rel, link.strip()))
@@ -154,7 +167,20 @@ def scan(check_files, resolvable, today, stale_days):
     return dangling, broken, stale, unstamped
 
 
-TOMBSTONE_FILE = os.path.join(REPO, "memory", "claude", "fleet", "librarian-tombstones.txt")
+# ⛔ ONE RULE, ONE LOCATION. The relative path is exported so store_contract.health() can rebind
+# it for a foreign store WITHOUT inventing a second filename. It invented one: until 2026-09-25 the
+# contract set TOMBSTONE_FILE to `<memory>/librarian-tombstones.txt` while this module defaulted to
+# `memory/claude/fleet/…`, so the REPORT read the maintained 153-entry file and the COMMIT GATE read
+# a near-empty one. Every acknowledgement ever written was invisible to the wall — the exact drift
+# the docstring above promises cannot happen ("the wall and the report can never disagree").
+# It blocked two unrelated commits on acked rot before anyone looked.
+# Governed docs that live at the repo root rather than under memory/. Exported for the same reason
+# as TOMBSTONE_REL: store_contract binds a memory/-only population, so without this the COMMIT GATE
+# never checked the constitution's own links while the standalone report did (2026-09-25).
+ROOT_DOCS = ("CLAUDE.md", "RECOVERY.md", "DESIGN.md", "PIPELINE.md", "goodmorning.md")
+
+TOMBSTONE_REL = os.path.join("memory", "claude", "fleet", "librarian-tombstones.txt")
+TOMBSTONE_FILE = os.path.join(REPO, TOMBSTONE_REL)
 
 
 def load_tombstones():
@@ -163,8 +189,14 @@ def load_tombstones():
     refs). Format: one entry per line, '#' comments; a plain repo path acks a broken backtick path,
     `[[name]]` acks a dangling link. (Librarian tombstone, 2026-06-28 — see WAYFINDING-signs-all-over.)"""
     paths, links = set(), set()
+    src = TOMBSTONE_FILE
+    # Installs before 2026-09-26 kept this file at <memory>/librarian-tombstones.txt. Read it there if the
+    # new location does not exist yet, so an upgrade does not silently un-acknowledge known rot.
+    legacy = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(TOMBSTONE_FILE))), "librarian-tombstones.txt")
+    if not os.path.exists(src) and os.path.exists(legacy):
+        src = legacy
     try:
-        with open(TOMBSTONE_FILE, encoding="utf-8") as fh:
+        with open(src, encoding="utf-8") as fh:
             for line in fh:
                 line = line.split("#", 1)[0].strip()
                 if not line:

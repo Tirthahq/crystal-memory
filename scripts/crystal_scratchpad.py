@@ -29,6 +29,7 @@ over budget instead of silently truncating.
 import argparse
 import json
 import os
+import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -70,6 +71,58 @@ def _redacted(text):
     except Exception:
         return text
 
+MAX_LINKS = 6             # pointers expanded per boot
+DESC_CHARS = 260          # of each linked note's `description:`
+LINK_RE = re.compile(r"\[\[([^\]|#]+)")
+
+
+def expand_links(shown, repo=None):
+    """Follow each [[pointer]] in the DELIVERED lines one step: name the file and its description.
+
+    ⛔ A POINTER THAT NOTHING AT BOOT FOLLOWS IS NOT DELIVERED. The natural way to keep this pad short
+    is to move the detail into a note and leave `[[that-note]]` behind. But boot delivered the pad
+    only, so the pointer arrived as bare text and the detail it named reached no one: moving it out
+    of the pad moved it somewhere no reader goes. (Measured on our own boot, where the same move had
+    been made for weeks and every pointer in the pad was a dead end at session start.)
+    So each pointer now carries the linked note's own one-line `description:` and its path. Only the
+    lines actually shown are scanned: a pointer below the cut was not delivered either.
+    ⚠ An unresolvable name is LISTED as dead, never dropped, because a silently missing pointer is
+    the same failure one level down.
+    """
+    names = []
+    for line in shown:
+        for n in LINK_RE.findall(line):
+            n = n.strip()
+            if n and n not in names:
+                names.append(n)
+    names = names[:MAX_LINKS]
+    if not names:
+        return []
+    root = repo or REPO
+    store = os.path.join(root, os.path.dirname(SCRATCHPAD))     # the store the pad lives in
+    found = {}
+    for dirpath, _dirs, files in os.walk(store):
+        for f in files:
+            stem = f[:-3] if f.endswith(".md") else None
+            if stem in names and stem not in found:
+                found[stem] = os.path.join(dirpath, f)
+    out = ["", "↳ POINTERS IN THIS PAD, FOLLOWED (open the file for the rest):"]
+    for n in names:
+        p = found.get(n)
+        if not p:
+            out.append(f"  · [[{n}]]: ⚠ no note with this name, so the pointer is dead")
+            continue
+        desc = ""
+        try:
+            with open(p, encoding="utf-8") as fh:
+                m = re.search(r"^description:\s*(.+)$", fh.read(4000), re.M)
+            desc = (m.group(1).strip() if m else "")[:DESC_CHARS]
+        except OSError:
+            pass
+        out.append(f"  · [[{n}]] ({os.path.relpath(p, root)}): {desc or '(no description)'}")
+    return out
+
+
 def path(repo=None):
     return os.path.join(repo or REPO, SCRATCHPAD)
 
@@ -102,6 +155,10 @@ def boot_text(repo=None, limit=BOOT_LINES):
     if rest:
         out += ["", f"… {rest} more line(s) not shown. The newest is at the top; if something old still "
                     f"matters, move it up or make it a crystal."]
+    try:
+        out += expand_links(shown, repo)
+    except Exception as exc:          # following pointers must never silence the pad itself
+        out += ["", f"↳ (pointer expansion failed: {type(exc).__name__}; the pad above is complete)"]
     if len(content) > WARN_LINES:
         out += ["", f"⚠ This scratchpad is {len(content)} lines. Fold it: promote what became true into "
                     f"crystals, archive the rest. An append-only store with no prune step rots quietly."]
@@ -174,6 +231,30 @@ def selftest():
     check("and it SAYS how much it withheld", "more line(s) not shown" in t)
     check("and it warns that the file wants a fold", "rots quietly" in t)
     check("the newest content survives truncation", "- line 0" in t and "- line 599" not in t)
+
+    # ⛔ A POINTER NOTHING FOLLOWS IS NOT DELIVERED. The pad says "detail in [[a-note]]"; before the
+    # fix boot delivered that as bare text and the note's content reached no one.
+    # MUTATION: make expand_links return [] and the first three rows go red.
+    os.makedirs(os.path.join(d, "memory", "notes"), exist_ok=True)
+    with open(os.path.join(d, "memory", "notes", "why-the-retry-was-removed.md"), "w") as fh:
+        fh.write("---\nname: why-the-retry-was-removed\n"
+                 "description: the retry masked a real timeout; removed after it hid two outages\n"
+                 "---\n\nthe long version\n")
+    with open(p, "w") as fh:
+        fh.write("# S\n\n## today\n\n- detail moved to [[why-the-retry-was-removed]]\n"
+                 "- and see [[a-note-that-does-not-exist]]\n")
+    t = boot_text(d)
+    check("a [[pointer]] in the pad arrives FOLLOWED: the note's description is delivered",
+          "the retry masked a real timeout" in t)
+    check("and it names the file the pointer resolves to",
+          os.path.join("memory", "notes", "why-the-retry-was-removed.md") in t)
+    check("a dead pointer is SAID to be dead, not silently dropped",
+          "a-note-that-does-not-exist" in t and "pointer is dead" in t)
+    with open(p, "w") as fh:
+        fh.write("# S\n\n" + "\n".join(f"- line {i}" for i in range(200))
+                 + "\n- below the cut [[why-the-retry-was-removed]]\n")
+    check("a pointer BELOW the delivered cut is not followed (it was not delivered either)",
+          "the retry masked a real timeout" not in boot_text(d))
 
     print("SELFTEST PASS" if ok else "SELFTEST FAILED")
     return 0 if ok else 1

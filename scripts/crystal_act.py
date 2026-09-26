@@ -59,13 +59,29 @@ FAT_ESSENCE = 1500           # HOWTO-mint-a-crystal §6: keep an essence ≲ thi
                              # a slow one) — reported by crystal_delivery_audit.py --budget instead.
 
 CLAIM_BINDING_PATH = "builtin/claim-shaped-write-binding"
+# ⭐ (4) IS A CAUSE ASK, ADDED 2026-09-25, AND IT RIDES THIS BINDING RATHER THAN BECOMING ITS OWN
+# CRYSTAL — deliberately. `GUARD-discriminator-rule` carried the knowing and was bound to NOTHING, so
+# nothing warned until `check-discriminator.py` fired at COMMIT time. Two reviewers, briefed separately,
+# both refused to bind it as a new crystal and gave the same reason: the act channel is 3.3x
+# oversubscribed, so a NEW contestant evicts a knowing that already matched, while EXTENDING a binding
+# that already fires on exactly these acts costs ~170 chars on claim-shaped writes and evicts nothing.
+# ⚠ Falsification and discrimination are DIFFERENT failure modes and (1) does not cover (4): "what
+# would make this false" is not "what else would produce this exact observation".
+# ⚠ KNOWN LIMIT, not fixed here: `is_claim_shaped_write` goes quiet when the draft already has a
+# falsifier section, so a cause-claim inside such a draft still reaches only the commit gate. Widening
+# the detector is a delivery change and needs its own displacement measurement.
 CLAIM_BINDING_ESSENCE = (
     "CLAIM-SHAPED WRITE: pause before this strategy/positioning claim hardens. "
     "Ask: (1) What would FALSIFY this? "
     "(2) Does an existing vision/positioning node already claim something DIFFERENT? "
     "Check VISION-what-we-are-building: the extender is the DOOR, not the destination. "
     "(3) Have you briefed this leg to an adversary, or only the legs you like? "
-    "Name the legs you did NOT brief."
+    "Name the legs you did NOT brief. "
+    "(4) If you are naming a CAUSE (root cause / proven / localized / because): write the RIVAL "
+    "(what ELSE produces this exact observation?) and the DISCRIMINATOR (the one measurement that "
+    "separates them). No discriminator means you have a HYPOTHESIS - label it. On 2026-07-19 four "
+    "confident cause-claims were made in one evening; every one had evidence and every one was wrong, "
+    "because evidence CONSISTENT with a cause does not DISCRIMINATE between causes."
 )
 _CLAIM_PATH_RE = re.compile(
     r"(^|/)(memory/(business/strategy|design/aris|claude/feedback)/|.*(?:strategy|positioning|vision).*)",
@@ -358,6 +374,35 @@ def matches_ctx(c, ctx_l):
     return (not keys) or any(k in ctx_l for k in keys)
 
 
+SPEC_THRESHOLD = 8           # a match key of this many chars or more counts as SPECIFIC
+
+# ⭐ HEARD ENOUGH. Names of crystals delivered so often they have stopped being read. They are not
+# WRONG (retire is for wrong) and not necessarily FAT (a re-mint is for fat) — they are FAMILIAR,
+# which is a third state the store had no verb for. A crystal heard hundreds of times does not need
+# its argument again, it needs its reminder, so past the line it is delivered as its TELL.
+# Populated by `heard_enough()`; empty means the behaviour is off, which is how it ships until
+# measured. ⛔ The WINNER is always exempt, as with every other demotion here.
+HEARD: set[str] = set()
+
+
+def match_specificity(c, ctx_l):
+    """Length of the LONGEST `match:` key that admitted this crystal, 0 if none did.
+
+    ⭐ A CHEAP, DETERMINISTIC RELEVANCE SCORE, and the only one this channel has. `order()` ranks by
+    FAIRNESS (least-served-first), which is deliberate and is not relevance, so the packer had no
+    way to spend more budget on a crystal that fits the act better.
+
+    MEASURED 2026-09-25, n=44 judged (act, crystal) admissions: a crystal admitted by a key of >=8
+    chars changed the action **71.4%** of the time; one admitted only by a shorter key, **33.3%**
+    (Fisher p=0.025). The trend is monotone across thresholds 6/8/10 (55.6 / 71.4 / 85.7 for the
+    long arm), which is the part worth trusting.
+    ⚠ THE 8 WAS CHOSEN AFTER SEEING THE DATA. Three thresholds were tested, so Bonferroni wants
+    0.0167 and this does not clear it. Treat the threshold as tuned, not as established.
+    """
+    keys = [k.strip().lower() for k in (c.get("match") or "").split(",") if k.strip()]
+    return max((len(k) for k in keys if k in ctx_l), default=0)
+
+
 def candidates(act, ctx="", target="", who=None, repo=None, crystals=None):
     """Everything act-bound + who-admitted + essence-bearing + `match`-satisfied for this act.
 
@@ -455,8 +500,45 @@ def _redacted(text):
     except Exception:
         return text
 
-def pack(cands, budget=None):
+HEAD_FLOOR = 320             # below this a head carries no knowing, so starve instead of teasing
+HEAD_MARK = "…[head only"    # a delivered piece SAYS it is a head, so no counter needs side state
+
+
+def _head(piece, allow, c=None):
+    """Cut `piece` to at most `allow` chars at a LINE boundary, and say so.
+
+    ⛔ Never cut mid-sentence: a truncated imperative reads as a complete one. We cut at the last
+    newline that fits, keep at least the first line, and append a marker naming the file so the tail
+    is one Read away. Head-first is safe because an essence's first lines ARE the claim."""
+    marker = "\n  %s — full: %s]" % (HEAD_MARK, Path(c["path"]).name if c and c.get("path") else "the crystal")
+    room = max(0, allow - len(marker))
+    if len(piece) <= allow:
+        return piece
+    cut = piece[:room]
+    nl = cut.rfind("\n")
+    if nl > 0:
+        cut = cut[:nl]
+    return cut.rstrip() + marker
+
+
+def pack(cands, budget=None, ctx_l=None):
     """Greedy fit at whole-crystal granularity. Returns (delivered, starved) as [(c, piece)].
+
+    ⭐ VAGUE MATCHES GET THEIR TELL, NOT A HEAD (2026-09-25). When `ctx_l` is supplied, any crystal
+    behind the winner that was admitted ONLY by a short key (`match_specificity` < SPEC_THRESHOLD)
+    is delivered as its authored one-liner instead of a ~1855-char head. Nothing is silenced; the
+    knowing still arrives, at 4.6% of the characters.
+
+    WHY, and both legs were measured before the change:
+      · a vaguely-matched crystal changes the action 33.3% of the time, against 71.4% for a
+        specifically-matched one (n=44, Fisher p=0.025)
+      · on the SAME (act, crystal) pairs, its TELL does the job as often as its head:
+        45.9% vs 40.5%, **McNemar p=0.727** on 37 pairs (n01=5, n10=3)
+    ⚠ 5-vs-3 discordant pairs can only detect a LARGE effect, so this is "no difference found",
+    not "no difference". The decision rule was written down before the data was read: a tie at
+    4.6% of the cost is a swap.
+    Counterfactual over 76 real acts: 2.34 -> 3.59 crystals delivered per act on FEWER characters
+    (3894 -> 3327), and acts saturating the budget fall from 63 to 23.
 
     ⛔ THE DEFECT THIS FIXES (re-derived 2026-08-02 against the real corpus). This loop used to
     `break` at the first crystal that would not fit, so ONE fat crystal ended delivery for every
@@ -469,15 +551,50 @@ def pack(cands, budget=None):
     regression, not the win.
     """
     budget = CHARS_BUDGET if budget is None else budget
+    hard_cap = max(HEAD_FLOOR, budget // 2)      # no crystal BEHIND the winner may own more than half
     got, starved, used = [], [], 0
+
+    # PASS 1 — whole crystals, greedy.
+    # ⭐ THE WINNER IS EXEMPT FROM hard_cap, UP TO THE WHOLE BUDGET (the maintainer, 2026-09-24, on Grok's
+    # reading). `order()` sells starvation as "a one-act delay of the knowing IN FULL", and with a flat
+    # hard_cap=budget//2 that promise was unkeepable: MEASURED the same day, 70 of 105 bash-bound
+    # essences exceed 2000, so two thirds of the channel could never arrive whole under ANY rotation —
+    # a fat crystal's turn came, it was clipped to 2000, and `seen` incremented anyway, so it spent its
+    # fairness credit on a partial. Letting the crystal rotation just elevated take what it needs is
+    # what makes "next act, in full" true. Everything BEHIND it stays capped, so this is not a removal
+    # of the wallpaper guard: the budget is unchanged and one crystal can still never exceed it.
     for c in cands:
         piece = f"✦ {(c.get('essence') or '').strip()}"
+        cap = budget if not got else hard_cap
+        spec = match_specificity(c, ctx_l) if ctx_l else 0
+        _name = Path(c["path"]).name if c.get("path") else ""
+        if got and (_name in HEARD or (ctx_l and 0 < spec < SPEC_THRESHOLD)):
+            # heard enough, or a vague match: the authored line instead of a truncation
+            import crystal_registry as _cr
+            piece = f"✦ {_cr.tell(c)}"
+        elif len(piece) > cap:
+            piece = _head(piece, cap, c)
         if used and used + len(piece) > budget:
             starved.append((c, piece))
             continue            # SKIP, never break — a fat crystal must not silence the queue
         got.append((c, piece))
         used += len(piece)
-    return got, starved
+
+    # PASS 2 — spend what pass 1 left on HEADS of the starved, instead of leaving it unspent.
+    # ⛔ A starved crystal used to contribute nothing at all, so a busy act delivered three winners
+    # and 45 silences. An essence leads with its ⛔ headline by convention, so its head is the
+    # knowing; the tail is the evidence for it. Half a knowing beats none, and the marker says
+    # which file to open for the rest.
+    kept = []
+    for c, piece in starved:
+        room = budget - used
+        if room < HEAD_FLOOR:
+            kept.append((c, piece))
+            continue
+        head = _head(piece, min(room, hard_cap), c)
+        got.append((c, head))
+        used += len(head)
+    return got, kept
 
 
 def plan(act, ctx="", target="", who=None, repo=None, crystals=None, session="plan",
@@ -486,8 +603,14 @@ def plan(act, ctx="", target="", who=None, repo=None, crystals=None, session="pl
     is handed in, and writes none — the audit replays with this."""
     cands = candidates(act, ctx=ctx, target=target, who=who, repo=repo, crystals=crystals)
     ordered = order(cands, act, session, led=led if led is not None else {}, now=now)
-    got, starved = pack(ordered, budget)
-    return {"matched": cands, "ordered": ordered, "delivered": got, "starved": starved}
+    got, starved = pack(ordered, budget, ctx_l=match_scope(ctx, target))
+    # ⛔ REPORT THE HEADS SEPARATELY OR THE FIX LAUNDERS ITS OWN METRIC. Pass 2 converts silences
+    # into heads, so "starved" drops — and a number that improves because you stopped counting the
+    # hard case is the failure this repo keeps finding in its own instruments. `headed` is the new
+    # honest middle: delivered, but not in full.
+    headed = [(c, piece) for c, piece in got if HEAD_MARK in piece]
+    return {"matched": cands, "ordered": ordered, "delivered": got, "starved": starved,
+            "headed": headed}
 
 
 def due_for(act, session, now=None, repo=None, dry=False, ctx="", target="", max_n=None):
@@ -536,7 +659,24 @@ def due_for(act, session, now=None, repo=None, dry=False, ctx="", target="", max
             continue
         # Remove before packing AND the tier-0 hints: a held-back knowing must not leak
         # through the short-form starvation footer or consume delivery/backoff budget.
-        if held_back(c, act, session):
+        _held = held_back(c, act, session)
+        # ⛔⛔ THE TWO ARMS WERE LOGGED AT DIFFERENT STAGES, WHICH MADE v(c) UNCOMPUTABLE.
+        # `suppressed-holdback` is written HERE, at eligibility. The other arm was only ever visible
+        # downstream as `PreToolUse` / `displaced:budget`, i.e. AFTER order(), pack() and the `max_n`
+        # cap — and crystals cut by the cap are deliberately not logged at all. So the control arm was
+        # the full 10% of eligible acts while the treatment arm was a survivor subset, and the implied
+        # holdback rate read 63.6% against a configured 10%. The randomiser is fine: measured 10.16%
+        # at PCT=10 over 20,000 draws, 50.28% at 50, 0% at 0.
+        # ⇒ ELIGIBILITY_LOG captures BOTH arms at the SAME stage. Assignment itself is never logged
+        # because held_back() is deterministic in (session, crystal, act) and is recomputable.
+        # OFF by default: one row per eligible crystal per act is ~10x the suppressed volume, which is
+        # only worth paying during a measurement window.
+        if not dry and os.environ.get("CRYSTAL_ELIGIBILITY_LOG") == "1":
+            import crystal_registry as cr
+            cr.record_delivery("act", c.get("path"), event="eligible", act=act,
+                               session=(session if session and session != "nosession" else None),
+                               detail=("held" if _held else "kept"))
+        if _held:
             if not dry:
                 import crystal_registry as cr
                 # ⛔ TWO SENTINELS: _session_id() returns "nosession", the ledger documents "unknown".
@@ -622,15 +762,91 @@ def _read_payload(argv):
         return {}
 
 
+def _log_delivery(cr, due, ev, act, session):
+    """Telemetry for what ARRIVED *and* what was DISPLACED, distinguishing full from head.
+
+    ⛔ THE GAP THIS CLOSES (the maintainer, 2026-09-24, via an adversarial review): `record_delivery` was looped
+    over `due` alone, so the log held 18,563 act-channel ARRIVALS and **zero** displacements, ever —
+    "which knowings chronically lose the budget race" was unanswerable from history. Worse, heads live
+    IN `due`, so a truncated knowing logged identically to a whole one and even the arrival series was
+    coarser than it looked.
+    ⚠ Displacement rows use `event="displaced:budget"`, which `crystal_registry.is_arrival` excludes,
+    because FOUR readers counted every row in this file and would otherwise have inflated silently.
+    """
+    sess = session if session and session != "nosession" else None
+    for c, piece in due:
+        cr.record_delivery("act", c.get("path"), event=ev, act=act, session=sess,
+                           detail=("head" if HEAD_MARK in (piece or "") else "full"))
+    for c, _piece in getattr(due, "starved_pairs", ()) or ():
+        cr.record_delivery("act", c.get("path"), event="displaced:budget", act=act, session=sess,
+                           detail="starved")
+
+
+def explain(needle, act, ctx="", target="", session=None, repo=None, now=None):
+    """WHY is this crystal not firing right now? Separates BINDING from ELIGIBILITY.
+
+    ⛔ WHY THIS EXISTS (2026-09-24). `--dry` shows what would fire THIS INSTANT, which folds together
+    two completely different answers: "your match never binds to this act" and "it bound fine and
+    fired two minutes ago, so it is in backoff". I read the second as the first and reported a
+    phantom bug — a crystal that was working, delivered verbatim twice while I was calling it broken.
+    A diagnostic that cannot tell a dead binding from a recent success will keep producing that
+    mistake. ⇒ this prints the binding result and, when it binds, the exact reason it is quiet.
+    """
+    now = time.time() if now is None else now
+    session = session or _session_id({})
+    led = _load()
+    # ⛔ candidates(ctx="") is NOT "unfiltered" — the match filter runs against the empty string, so
+    # every crystal that HAS a `match:` is excluded and the answer is always "not bound at all".
+    # That is the same conflation this function exists to end, reproduced inside the fix for it.
+    # Ask the registry directly for the act-bound set, before any ctx filtering.
+    import crystal_registry as cr
+    who = os.environ.get("CRYSTAL_WHO", "frontier")
+    allc = cr.apply_staleness(cr.for_act(cr.load_crystals(str(repo or REPO)), act, who=who))
+    bound = candidates(act, ctx=ctx, target=target, repo=repo)    # with the ctx filter applied
+    bpaths = {c.get("path") for c in bound}
+    hits = [c for c in allc if needle.lower() in (c.get("path") or "").lower()]
+    if not hits:
+        print(f"[why] no crystal matching {needle!r} is bound to act={act} at all "
+              f"(check its `on:` and `who:`)")
+        return 1
+    for c in hits:
+        base = os.path.basename(c.get("path", ""))
+        print(f"[why] {base}")
+        print(f"      match: {c.get('match') or '(none — fires on every ' + act + ')'}")
+        if c.get("path") not in bpaths:
+            print(f"      ⛔ DOES NOT BIND to this ctx — no match term is present in the act text.")
+            print(f"      ctx was: {ctx[:120]!r}")
+            continue
+        print("      ✅ BINDS to this ctx")
+        seen = led.get(f"act-session:{session}:{act}:{base}", 0)
+        last = led.get(f"act:{act}:{base}", 0)
+        wait = BASE_MIN * (BACKOFF_BASE ** seen) * 60
+        if seen >= MAX_PER_SESSION:
+            print(f"      ⏸ quiet: session cap reached ({seen}/{MAX_PER_SESSION} this session)")
+        elif last and now - last < wait:
+            print(f"      ⏸ quiet: BACKOFF — fired {int(now-last)}s ago, next eligible in "
+                  f"{int(wait-(now-last))}s (seen {seen}x, so the wait is {int(wait)}s)")
+        elif held_back(c, act, session):
+            print("      ⏸ quiet: held back by the budget/held-back rule")
+        elif c.get("expired") and seen >= 1:
+            print("      ⏸ quiet: expired stub, already announced once this session")
+        else:
+            print("      ✅ ELIGIBLE NOW — it should appear in --dry")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Deliver act-bound crystals", allow_abbrev=False)
-    for flag in ("act", "ctx", "target", "max"):
+    for flag in ("act", "ctx", "target", "max", "why"):
         parser.add_argument("--" + flag)
     for flag in ("dry", "text", "selftest"):
         parser.add_argument("--" + flag, action="store_true")
     args = parser.parse_args()
     if args.selftest:
         return selftest()
+    if args.why:
+        return explain(args.why, (args.act or "bash").strip().lower(),
+                       ctx=args.ctx or "", target=args.target or "")
     payload = _read_payload(sys.argv[1:])
 
     act = args.act.strip().lower() if args.act is not None else _infer_act(payload)
@@ -648,6 +864,16 @@ def main():
     # from a filename merely NAMED inside it, and that ambiguity was the claim-binding's whole false
     # positive rate (2026-07-27).
     target = str(ti.get("file_path") or "")
+    # ⛔ A UserPromptSubmit PAYLOAD HAS NO `tool_input`, SO THE LINE ABOVE LEAVES ctx EMPTY — and an
+    # empty scope admits exactly the crystals with NO `match:` list (those always match) while
+    # admitting no matched one. That is precisely backwards, and it is why wiring the `prompt` act
+    # needed this two-line change and not just a hook entry. The request text IS the act's text here.
+    # ⚠ AND THE HOOK MUST NOT PASS `--act`: _read_payload returns {} whenever --act is present (a
+    # deliberate stop against the 2026-07-28 hang), so an explicit --act discards the very payload
+    # carrying the prompt. The UserPromptSubmit hook passes no --act and lets _infer_act derive it,
+    # exactly like the PreToolUse hooks. I wired it the other way first and it was silently inert.
+    if act == "prompt" and not ctx.strip():
+        ctx = str(payload.get("prompt") or "")[:8000]
     if args.ctx is not None:             # test/CLI override
         ctx = args.ctx
     if args.target is not None:
@@ -760,9 +986,7 @@ def main():
         sys.stderr.write("\n" + header + "\n" + body + "\n\n")
         try:
             import crystal_registry as cr
-            for c, _p in due:
-                cr.record_delivery("act", c.get("path"), event=ev, act=act,
-                                   session=(session if session and session != "nosession" else None))
+            _log_delivery(cr, due, ev, act, session)
         except Exception:
             pass
         return 0
@@ -770,9 +994,7 @@ def main():
                                              "additionalContext": _redacted(header + "\n" + body)}}))
     try:
         import crystal_registry as cr
-        for c, _p in due:
-            cr.record_delivery("act", c.get("path"), event=ev, act=act,
-                               session=(session if session and session != "nosession" else None))
+        _log_delivery(cr, due, ev, act, session)
     except Exception:
         pass                        # telemetry must never cost a delivery
     return 0
@@ -1077,10 +1299,48 @@ def selftest():
     thin = {"path": "/x/m-thin.md", "deliver": "act", "on": "bash", "essence": "T" * 200, "who": "all"}
     got, starved = pack([fat, mid, thin], budget=4000)
     names = [os.path.basename(c["path"]) for c, _ in got]
-    check(names == ["z-fat.md", "m-thin.md"],
-          "pack SKIPS the crystal that will not fit and keeps going (mid starved, thin still fires)")
-    check([os.path.basename(c["path"]) for c, _ in starved] == ["a-mid.md"],
-          "pack REPORTS what it starved (the guard reads this)")
+    # 2026-09-24: the contract changed from SKIP to CAP-AND-HEAD. No crystal may own more than half
+    # the act (hard_cap), and whatever the greedy pass leaves is spent on HEADS of the rest instead
+    # of being left unspent. On this fixture the old rule delivered 2 of 3 and silenced the middle.
+    check(sorted(names) == ["a-mid.md", "m-thin.md", "z-fat.md"],
+          "all three fire (was: mid silenced under the old SKIP rule)")
+    check(starved == [], "nothing is starved when the budget can carry a head for everyone")
+    fat_piece = [pc for c, pc in got if c["path"].endswith("z-fat.md")][0]
+    # ⭐ 2026-09-24 (the maintainer): THE ROTATION WINNER IS EXEMPT FROM hard_cap, up to the whole budget. The
+    # previous contract capped every crystal at budget//2, so a fat one's turn produced a 2000-char
+    # head while `seen` incremented anyway — rotation's promise of "next act, IN FULL" could never be
+    # kept for the 70 of 105 bash essences over 2000. This assertion is the old one INVERTED on
+    # purpose; reverting the packer sends it red.
+    check(len(fat_piece) > 2000 and HEAD_MARK not in fat_piece,
+          "the WINNER (3000 chars) arrives WHOLE, uncapped, not as a head")
+    # ...and the exemption is for the winner ALONE, or it is a removal of the wallpaper guard.
+    # ⛔ THE OBVIOUS FIXTURE CANNOT PROVE THIS, and a first version of this check passed on an
+    # "exempt everyone" mutant. `hard_cap` is enforced in TWO places — pass 1's pre-clip AND pass 2's
+    # `min(room, hard_cap)` — so on all-fat input the two branches are genuinely EQUIVALENT, not
+    # weakly tested (a surviving mutant whose code is over-determined, not whose test is soft).
+    # They diverge ONLY when a non-winner is over-cap but still FITS in what the winner left:
+    #   winner-exempt  -> b is pre-clipped to hard_cap 2000 and headed
+    #   exempt-everyone -> b arrives WHOLE at 2502, unheaded
+    a_small = {"path": "/x/a.md", "deliver": "act", "on": "bash", "essence": "A" * 1000, "who": "all"}
+    b_fat = {"path": "/x/b.md", "deliver": "act", "on": "bash", "essence": "B" * 2500, "who": "all"}
+    gb, _sb = pack([a_small, b_fat], budget=4000)
+    by = {os.path.basename(c["path"]): pc for c, pc in gb}
+    check(len(by["a.md"]) == 1002 and HEAD_MARK not in by["a.md"], "the small winner arrives whole")
+    check(len(by["b.md"]) == 2000 and HEAD_MARK in by["b.md"],
+          "a NON-winner over hard_cap is still capped and headed even though it would have FIT whole "
+          "(the guard is not removed for everyone)")
+    check(sum(len(pc) for _c, pc in gb) <= 4000, "the winner exemption still never exceeds the budget")
+    check(sum(len(pc) for _, pc in got) <= 4000, "the capped+headed pack still respects the budget")
+    # the honest-metric half: a head must be reported as a head, or the starvation number lies
+    pl = {"delivered": got}
+    check(len([1 for _, pc in got if HEAD_MARK in pc]) == 1,
+          "exactly one piece is marked head-only, so `headed` can count it")
+    # and when there is genuinely no room, we starve rather than tease with a stub
+    big = [{"path": f"/x/b{i}.md", "deliver": "act", "on": "bash", "essence": "B" * 2000, "who": "all"}
+           for i in range(6)]
+    got2, starved2 = pack(big, budget=4000)
+    check(len(starved2) >= 1, "with no room left, pack still STARVES rather than emitting sub-floor stubs")
+    check(all(len(pc) >= HEAD_FLOOR for _, pc in got2), "no delivered piece is below the head floor")
 
     # ⛔ AND THE REPORT MUST SURVIVE THE TRIP TO THE READER. pack() always computed `starved`;
     # due_for threw it away into `_starved`, so a reader got five knowings with no way to know
@@ -1097,6 +1357,34 @@ def selftest():
     check(d2.starved >= d1.starved,
           "capping to 1 starves at least as many as the budget alone")
     check(sum(len(p) for _c, p in got) <= 4000, "pack never exceeds the budget")
+
+    # ── VAGUE MATCH -> TELL, NOT A HEAD (2026-09-25) ─────────────────────────────────────────
+    # A crystal admitted only by a SHORT key is delivered as its authored one-liner. Measured:
+    # head 45.9% vs tell 40.5% on the same 37 pairs, McNemar p=0.727, at 4.6% of the characters.
+    _spec = {"path": "/x/specific.md", "essence": "S" * 2600,
+             "match": "git reset --hard", "tell": "specific one-liner"}
+    _vague = {"path": "/x/vague.md", "essence": "V" * 2600,
+              "match": "rag", "tell": "vague one-liner"}
+    _scope = "git reset --hard head~1 and some rag work"
+    check(match_specificity(_spec, _scope) == 16, "specificity reads the LONGEST matching key")
+    check(match_specificity(_vague, _scope) == 3, "a short key scores short")
+    # a SECOND specific crystal, deliberately NOT the winner: the winner is exempt from the swap,
+    # so without this a runaway SPEC_THRESHOLD demotes everything and the suite stays green.
+    # (Found by mutation: SPEC_THRESHOLD=999 passed the first version of this test.)
+    _spec2 = {"path": "/x/specific2.md", "essence": "T" * 1200,
+              "match": "some rag work", "tell": "second specific one-liner"}
+    _got, _ = pack([_spec, _spec2, _vague], 4000, ctx_l=_scope)
+    _by = {Path(c["path"]).stem: piece for c, piece in _got}
+    check("vague" in _by and len(_by["vague"]) < 200,
+          "the vaguely-matched crystal arrives as its TELL, not a ~2000-char head")
+    check("specific" in _by and len(_by["specific"]) > 1000,
+          "...and the specifically-matched WINNER is NOT demoted")
+    check("specific2" in _by and len(_by["specific2"]) > 200,
+          "...nor is a specifically-matched crystal BEHIND the winner (catches a runaway threshold)")
+    _got_off, _ = pack([_spec, _vague], 4000)          # ctx_l omitted = previous behaviour
+    _by_off = {Path(c["path"]).stem: piece for c, piece in _got_off}
+    check(len(_by_off.get("vague", "")) > 200,
+          "without ctx_l the old head-truncation behaviour is unchanged")
     # the pre-fix behaviour, stated so the regression is legible: break would have stopped at mid.
     _brk, _u = [], 0
     for _c in [fat, mid, thin]:
