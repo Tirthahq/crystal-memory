@@ -120,7 +120,11 @@ def in_flight(repo, now=None):
     """Background output touched recently, plus any processes the user asked us to look for."""
     now = now or time.time()
     lines = []
-    roots = {tempfile.gettempdir(), "/tmp", "/private/tmp"}
+    # CRYSTAL_TASK_ROOTS (comma-separated) replaces the temp roots scanned for background output. The
+    # default reads the machine's real temp dirs, which is right for a hook and wrong for a recording or
+    # a test: docs/demo/ points it at a fixture so a demo never prints another session's job paths.
+    override = [p.strip() for p in os.environ.get("CRYSTAL_TASK_ROOTS", "").split(",") if p.strip()]
+    roots = set(override) if override else {tempfile.gettempdir(), "/tmp", "/private/tmp"}
     seen, jobs = set(), []
     for root in roots:
         for f in glob.glob(os.path.join(root, "claude-*", "*", "*", "tasks", "*.output")):
