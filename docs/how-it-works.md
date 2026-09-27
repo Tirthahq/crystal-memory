@@ -77,8 +77,7 @@ runs the command a note names, because settling a claim against the world is its
 **maintenance layer needs `git`** and shells out to it: the Librarian reads `git diff --cached`, the
 Corrector reads `git ls-files`, and **`node-cleaner.py --apply` uses `git mv`** to relocate files. All
 of those are reads except the `git mv`, and every `--apply` defaults to a plan that changes nothing.
-Nothing in the package reaches the network. (`noderag/` is not part of the installed package; it calls
-an embedding server on localhost and refuses any other address.)
+Nothing in the package reaches the network.
 
 ## The capture reminder and the scratchpad
 

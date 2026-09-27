@@ -19,7 +19,7 @@ translating.
 Every command below assumes you have cloned this repo somewhere. Adjust `~/src` to taste.
 
 ```sh
-git clone https://github.com/tjonesit/crystal-memory ~/src/crystal-memory
+git clone https://github.com/Tirthahq/crystal-memory ~/src/crystal-memory
 export CRYSTALS=~/src/crystal-memory      # used by the commands below
 ```
 
