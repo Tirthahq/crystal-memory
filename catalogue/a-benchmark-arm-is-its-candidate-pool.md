@@ -3,8 +3,8 @@ name: a-benchmark-arm-is-its-candidate-pool
 family: C
 symptom: Two configurations are being compared and I cannot say what is different between them
 source: crystal-a-benchmark-arm-is-its-candidate-pool
-source_sha: d8491b838002e2466c14da7362df2f946a2a94778fb1c367a50d7fb501bfda54
-derived: 2026-09-23
+source_sha: 7ddb8deff48fd3f7d7b3e43a0fc79b96d91371f39daffe4cae80d4b3f087ca12
+derived: 2026-10-06
 measured_on: 2026-09-22
 
 ---
@@ -39,6 +39,12 @@ from picking one document out of three thousand, and the number licenses nothing
 
 Both arms reported a hit rate. **Neither carried its candidate set anywhere in its output.** Every
 figure was accurate and the comparison meant nothing.
+
+The return unit is a separate axis from the candidate pool. In a later 14-task unit ablation,
+the chunk ranker’s top hit resolved to the answering document 0 of 14 times. Serving that hit’s
+whole document therefore tests an inflated chunk winner, not a document ranker. The no-retrieval
+reader varied between runs; once allowed to abstain it scored 0 of 42. Do not claim the whole-document
+arm is below no retrieval without naming that answer policy.
 
 ## The rival, and the discriminator
 

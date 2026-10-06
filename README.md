@@ -27,7 +27,7 @@ crystal:
 ```
 
 1. **A crystal is a markdown note with a binding.** `on: bash` names the action it belongs to.
-   `match:` lists words that must appear in that action.
+   `match:` lists alternative keys that can match that action.
 2. **The agent is about to run** `npm run build 2>&1 | tail -20`.
 3. **Claude Code runs a hook just before the command.** The hook sees `| tail`, finds the note, and puts it in the agent's context.
 4. **The note says why that is dangerous:** `tail` reports its own exit code, so a failed build reads as a pass.
@@ -279,3 +279,20 @@ Use it, change it, redistribute it, including commercially, as long as you keep 
 - **It does not grant trademark rights.** Spanda Works, Tirtha and Ra stay ours. Build on the code, fork it, ship it. Just do not call yours by our names.
 
 The three crystals under `starter/` are documentation rather than code. They record things we observed while building our own systems, and carry the same licence.
+
+## Match semantics and delivery order
+
+Matching uses a comma-separated OR-list, case-insensitively. Keys normally match substrings,
+including longer tool names and path prefixes. Keys shorter than five characters, plus
+`guard`, `copy`, `usage`, `board`, `bench`, `reply`, and `price`, require word boundaries
+(no adjacent letters, digits, or underscore): `guard` matches “run guard” but not “guardrails”.
+A missing or empty list admits every context that reaches matching; dependency and act bindings
+still apply. Long writes match their subject and target path rather than their whole body.
+
+Delivery orders eligible notes by how often they have spoken in the current session first.
+Within each rotation tier, the default ranks word overlap with the act ahead of last-delivery
+time, payload length, and filename. Overlap is Jaccard similarity of lowercase word tokens
+at least three characters long, using the first 1,500 essence characters. `CRYSTAL_ORDER=rotation`
+restores the previous ordering. Backoff, session caps, and the character budget still apply;
+overlap ranks already-matched candidates and does not admit new ones. Adaptive packing is not
+included in this release.

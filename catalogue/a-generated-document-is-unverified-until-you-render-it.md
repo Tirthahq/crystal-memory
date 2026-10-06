@@ -3,8 +3,8 @@ name: a-generated-document-is-unverified-until-you-render-it
 family: E
 symptom: The file validates and the output still looks wrong
 source: crystal-a-generated-document-is-unverified-until-you-render-it
-source_sha: f6f37a2aea7f30871c97aa9e47734b93bba69cd4acc7a3d8d1178431ec97ba8a
-derived: 2026-09-18
+source_sha: 2ba34722e24471c8049c553c69a0755d642dc1e6e7bcf57b0da0a39a5636f895
+derived: 2026-10-06
 measured_on: 2026-08-26
 arrival:
   - C: i just opened it and still has spacing issues and looks like nothing was done
@@ -46,6 +46,11 @@ states and the renderer drops is invisible from the source and obvious from the 
 ⚠ **And when the person looking at the real artifact disagrees with your tooling, the tooling is wrong.**
 We verified three passes against a preview that exaggerates spacing, so it looked fixed to us and
 unchanged to them, twice. Do not spend a third round defending the instrument.
+
+An HTML conversion also passed 18 structural checks and looked correct in a preview, while the
+real target importer dropped capitalization and letter spacing and inserted phantom bullets
+after bordered headings. Bake required capitals into the text. After a second failed fix,
+probe labelled variants in the receiving application; only that application witnesses its import.
 
 ## The one-line check
 

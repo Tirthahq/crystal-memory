@@ -339,6 +339,11 @@ def match_scope(ctx, target="", long_ctx=None, head=None):
     return (subject + " " + (target or "")).lower()
 
 
+# Fixed task-named English keys; do not classify tool/path prefixes as words.
+# Held-out Q2: stopped 8/286 relevant (2.80%); kept 227/235 relevant (96.60%).
+_BOUNDARY_KEYS = frozenset("guard copy usage board bench reply price".split())
+
+
 def matches_ctx(c, ctx_l):
     """Does this crystal's `match:` comma-list admit this act's text? No `match:` ⇒ always.
 
@@ -371,7 +376,10 @@ def matches_ctx(c, ctx_l):
     if not mp:
         return True
     keys = [k.strip() for k in mp.split(",") if k.strip()]
-    return (not keys) or any(k in ctx_l for k in keys)
+    return (not keys) or any(
+        bool(re.search(r"(?<!\w)" + re.escape(k) + r"(?!\w)", ctx_l))
+        if len(k) < 5 or k in _BOUNDARY_KEYS else k in ctx_l
+        for k in keys)
 
 
 SPEC_THRESHOLD = 8           # a match key of this many chars or more counts as SPECIFIC
@@ -426,8 +434,33 @@ def candidates(act, ctx="", target="", who=None, repo=None, crystals=None):
     return cr.apply_staleness(live)
 
 
-def order(cands, act, session, led=None, now=None):
+_OVERLAP_TOK = re.compile(r"\w{3,}")
+
+
+def overlap(ctx, essence):
+    """Word overlap between the act and a crystal: Jaccard over lowercase `\\w{3,}` token sets, the essence cut to
+    its first 1,500 chars. EXACTLY the `O` arm of the pre-registered head-to-head (crystal-match-h2h-arms.py), so
+    what ships is what was measured. 0.0 when either side has no tokens."""
+    a = set(_OVERLAP_TOK.findall((ctx or "").lower()))
+    b = set(_OVERLAP_TOK.findall((essence or "")[:1500].lower()))
+    return len(a & b) / len(a | b) if (a and b) else 0.0
+
+
+def order(cands, act, session, led=None, now=None, ctx=None):
     """THE PRIORITY RULE — rotation first, packing second. Returns a NEW ordered list.
+
+    ⭐ 2026-10-01: RELEVANCE INSIDE EACH ROTATION TIER (`CRYSTAL_ORDER=overlap`, the default; `rotation` restores
+    the old order exactly). Until now nothing in this key looked at the act, so among crystals that had not yet
+    spoken the order was "longest unheard, then shortest" — relevance-blind. Measured 2026-09-29 on 50 fresh real
+    commands, two blind judges: ordering matched crystals by word overlap with the command put a relevant crystal
+    first +22.9 pts (Grok, 95% CI +7.4..+37.4) and +21.5 pts (Codex, CI +3.2..+39.5) more often than the live order.
+    A reranker scored higher (+28.6 / +37.5) but needs a daemon; the two did not separate from each other
+    (INCONCLUSIVE, fcda6df1). the maintainer delegated the call; overlap shipped as the free, deterministic, no-new-failure
+    choice. `seen` stays FIRST, so the per-session cap + backoff still limit repeats; overlap only reorders WITHIN a
+    tier. With no `ctx` (crystal_registry's caller) every overlap is 0 and the order is the old one.
+    ⚠ Overlap is still a PROXY (FINDING-word-overlap-is-our-recurring-proxy-2026-09-30): weak as a TRIGGER,
+    measured useful only as a RANKING among crystals that already matched. The deeper fix (predicate triggers) is lab
+    E-predicate. PLAYBOOK-what-works-hooks-and-tirtha-2026-10-01 row A4.
 
     ⛔ WHY (measured 2026-08-02, real corpus of 158 crystals / 34 act-bound). The old key was
     `0 if c['match'] else 1` — match-bearing crystals ahead of generic ones, from the 2026-07-23
@@ -462,10 +495,12 @@ def order(cands, act, session, led=None, now=None):
     """
     led = _load() if led is None else led
     now = time.time() if now is None else now
+    by_overlap = os.environ.get("CRYSTAL_ORDER", "overlap") != "rotation" and bool(ctx)
 
     def key(c):
         base = os.path.basename(c.get("path", ""))
         return (led.get(f"act-session:{session}:{act}:{base}", 0),
+                -overlap(ctx, c.get("essence")) if by_overlap else 0.0,
                 led.get(f"act:{act}:{base}", 0.0),
                 len(c.get("essence") or ""),
                 base)
@@ -602,7 +637,7 @@ def plan(act, ctx="", target="", who=None, repo=None, crystals=None, session="pl
     """Pure what-would-happen for one act: matched / delivered / starved. Reads NO ledger unless one
     is handed in, and writes none — the audit replays with this."""
     cands = candidates(act, ctx=ctx, target=target, who=who, repo=repo, crystals=crystals)
-    ordered = order(cands, act, session, led=led if led is not None else {}, now=now)
+    ordered = order(cands, act, session, led=led if led is not None else {}, now=now, ctx=f"{ctx} {target}")
     got, starved = pack(ordered, budget, ctx_l=match_scope(ctx, target))
     # ⛔ REPORT THE HEADS SEPARATELY OR THE FIX LAUNDERS ITS OWN METRIC. Pass 2 converts silences
     # into heads, so "starved" drops — and a number that improves because you stopped counting the
@@ -695,7 +730,10 @@ def due_for(act, session, now=None, repo=None, dry=False, ctx="", target="", max
     # 52 acts starved at least one, and the worst act delivered 5 of 46. A reader saw five knowings
     # and had no way to know forty-one others had matched. Silent truncation is indistinguishable
     # from "there was nothing else to say".
-    out, _starved = pack(order(eligible, act, session, led=led, now=now))
+    ordered = order(eligible, act, session, led=led, now=now, ctx=f"{ctx} {target}")
+    out, _starved = pack(ordered)
+    if not dry and os.environ.get("CRYSTAL_ELIGIBILITY_LOG") == "1":
+        _log_candidates(ordered, act, session, ctx, target)
     out = Due(out)
     out.starved = len(_starved)
     out.starved_names = tuple(os.path.basename(c.get("path", "")) for c, _p in _starved)
@@ -734,6 +772,48 @@ def due_for(act, session, now=None, repo=None, dry=False, ctx="", target="", max
         led[f"session-last:{session}"] = now
         _save(led)
     return out
+
+
+CANDIDATE_LOG_LIMIT = 32
+CANDIDATE_LOG_BYTES = 8192
+
+
+def _log_candidates(ordered, act, session, ctx, target):
+    """Bounded pre-pack snapshot; telemetry errors must never change delivery.
+
+    Rank is rotation priority, NOT a calibrated relevance score. The serving
+    budget is characters, not UTF-8 bytes; label both units explicitly.
+    """
+    try:
+        import crystal_registry as cr
+        filled, starved = pack(ordered)
+        delivered = {id(c) for c, _ in filled}
+        rows = [dict(crystal=Path(c["path"]).name,
+                     essence_length=len((c.get("essence") or "").strip()),
+                     rank=i + 1, order_score=1 / (i + 1),
+                     fill="delivered" if id(c) in delivered else "starved")
+                for i, c in enumerate(ordered[:CANDIDATE_LOG_LIMIT])]
+        record = dict(channel="act-candidates", event="displaced:candidate-snapshot", version=1,
+                      ts=int(time.time()), crystal="?",
+                      session=session if session and session != "nosession" else "unknown",
+                      act=act, target=target,
+                      match_scope_sha256=hashlib.sha256(match_scope(ctx, target).encode()).hexdigest(),
+                      ordered=rows, candidate_count=len(ordered),
+                      truncated=len(rows) != len(ordered),
+                      score_kind="reciprocal-rotation-rank",
+                      budget=CHARS_BUDGET, budget_unit="characters",
+                      fill_delivered=len(filled), fill_starved=len(starved),
+                      fill_bytes=sum(len(piece.encode("utf-8")) for _, piece in filled))
+        line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
+        # Refuse oversize records, including accidentally added essence text.
+        if len(line.encode("utf-8")) > CANDIDATE_LOG_BYTES:
+            return
+        path = Path(cr.DELIVERY_LOG)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(line)
+    except Exception:
+        pass
 
 
 def _read_payload(argv):
@@ -893,15 +973,9 @@ def main():
         return 0                        # delivery must never break a turn
 
     if not due:
-        # ⛔ SILENCE IS TWO OPPOSITE ANSWERS AND THEY RENDERED IDENTICALLY. Measured 2026-09-23 on a
-        # clean foreign install: `--dry --ctx` while a crystal was SUPPRESSED BY AN ACTIVE BACKOFF and
-        # `--dry --ctx` with a context that matched NOTHING both printed zero bytes and exited 0.
-        # One means "the loop is working and holding its budget"; the other means "nothing here binds
-        # to this act". A tester cannot tell them apart, and the natural reading of silence on a
-        # fresh install is "it is broken" — which is exactly the first hour the starter set exists to
-        # protect. This is the failure this package's own catalogue entry describes
-        # (`a-failed-lookup-must-not-render-as-a-real-zero`), living in the tool that ships it.
-        # ⚠ ONLY the --dry path explains. Live delivery MUST stay silent: backoff is the feature.
+        # ⚠ 2026-09-27, ported back from the package (Tirthahq/crystal-memory): --dry used to print NOTHING
+        # and exit 0 when nothing was due, so "no --ctx given", "nothing matched" and "suppressed by
+        # backoff" all looked identical to "it is broken". Live delivery stays silent; only --dry explains.
         if args.dry:
             print(f"[dry] act={act} would fire 0:")
             try:
@@ -1121,7 +1195,9 @@ def _dry_explains_its_silence_selftest(check):
     root = here.parent
     with tempfile.TemporaryDirectory() as td:
         dst = Path(td) / "repo"
-        shutil.copytree(root, dst, ignore=shutil.ignore_patterns(".git", "__pycache__", "scratch"))
+        (dst / "scripts").mkdir(parents=True)
+        for name in ("crystal_act.py", "crystal_registry.py"):
+            shutil.copy2(here / name, dst / "scripts" / name)
         cdir = dst / "memory" / "crystals"
         cdir.mkdir(parents=True, exist_ok=True)
         (cdir / "guard-probe.md").write_text(
@@ -1134,7 +1210,9 @@ def _dry_explains_its_silence_selftest(check):
             cmd = [sys.executable, str(dst / "scripts" / "crystal_act.py"), "--act", "bash", "--ctx", ctx]
             if dry:
                 cmd.append("--dry")
-            env = dict(os.environ, CLAUDE_SESSION_ID=session)
+            env = {k: v for k, v in os.environ.items()
+                   if not k.startswith("CRYSTAL_") and k != "CLAUDE_PROJECT_DIR"}
+            env["CLAUDE_SESSION_ID"] = session
             return subprocess.run(cmd, cwd=str(dst), capture_output=True, text=True, env=env).stdout
 
         run("zzprobe build", "live1", dry=False)                 # consume the budget -> backoff armed
@@ -1165,6 +1243,21 @@ def selftest():
 
     _ledger_selftest(check)
     _dry_explains_its_silence_selftest(check)
+
+    for key, inside in (("pty", "empty"), ("aris", "comparison"), ("nom", "nomic"),
+                        ("guard", "guardrails"), ("bench", "benchmark")):
+        check(not matches_ctx({"match": key}, inside)
+              and matches_ctx({"match": key}, f"run {key} now"),
+              f"key hygiene: {key} needs word boundaries")
+    check(matches_ctx({"match": "dispatch-codex"}, "scripts/dispatch-codex.py")
+          and matches_ctx({"match": "ssm-run"}, "ssm-run.py")
+          and matches_ctx({"match": "ask-grok"}, "ask-grok.py")
+          and matches_ctx({"match": "scripts/"}, "scripts/example.py"),
+          "key hygiene: longer tool/file/prefix keys retain substring matching")
+    check(matches_ctx({"match": "pty, dispatch-codex"}, "empty dispatch-codex.py")
+          and matches_ctx({"match": " , "}, "anything")
+          and not matches_ctx({"match": "pty", "depends_on": "i-12345678"}, "pty i-87654321"),
+          "key hygiene: OR, empty bindings, and dependency gating preserved")
 
     cs = [{"path": "/x/a.md", "on": "bash", "essence": "E1", "who": "all"},
           {"path": "/x/b.md", "on": "commit,write", "essence": "E2", "who": "all"},
@@ -1411,6 +1504,31 @@ def selftest():
     _led["act:bash:m-thin.md"] = 100.0
     check(order([mid, thin], "bash", "r1", led=_led)[0]["path"] == "/x/m-thin.md",
           "…equally-served crystals break the tie on LONGEST-UNHEARD, not on filename")
+
+    # --- RELEVANCE INSIDE A ROTATION TIER (2026-10-01, CRYSTAL_ORDER=overlap default) -----------------------
+    _rel = {"path": "/x/b-rel.md", "on": "bash", "who": "all",
+            "essence": "ssm-run rejects a document over 97,000 bytes; split the payload or stage via s3"}
+    _off = {"path": "/x/a-off.md", "on": "bash", "who": "all",
+            "essence": "commit messages end with the co-author trailer line"}
+    _ctx = "python3 scripts/ssm-run.py -i box payload.sql  # 140,000 bytes, split it"
+    _prev = os.environ.pop("CRYSTAL_ORDER", None)
+    try:
+        check(overlap(_ctx, _rel["essence"]) > overlap(_ctx, _off["essence"]) == 0.0,
+              "overlap() scores the on-topic essence above an off-topic one (and off-topic is exactly 0)")
+        check(order([_off, _rel], "bash", "r9", led={}, ctx=_ctx)[0]["path"] == "/x/b-rel.md",
+              "among UNHEARD crystals, the one that overlaps the act goes FIRST (it lost on every old key)")
+        check(order([_off, _rel], "bash", "r9", led={})[0]["path"] == "/x/a-off.md",
+              "…with NO act text the order is the old one (crystal_registry's caller is unchanged)")
+        _led2 = {"act-session:r9:bash:b-rel.md": 1}
+        check(order([_off, _rel], "bash", "r9", led=_led2, ctx=_ctx)[0]["path"] == "/x/a-off.md",
+              "…ROTATION STILL WINS: a crystal already heard this session goes behind an unheard one, however relevant")
+        os.environ["CRYSTAL_ORDER"] = "rotation"
+        check(order([_off, _rel], "bash", "r9", led={}, ctx=_ctx)[0]["path"] == "/x/a-off.md",
+              "…CRYSTAL_ORDER=rotation restores the old relevance-blind order exactly")
+    finally:
+        os.environ.pop("CRYSTAL_ORDER", None)
+        if _prev is not None:
+            os.environ["CRYSTAL_ORDER"] = _prev
 
     # --- `--max N`: cap INSIDE selection, so a capped-out crystal is not recorded as delivered -------
     # The API gap this closes: capping downstream still bumped the ledger and wrote a telemetry row for

@@ -3,8 +3,8 @@ name: a-check-written-with-the-code-inherits-its-assumptions
 family: B
 symptom: My check fails and I am sure the fix is wrong
 source: crystal-evidence-must-not-share-the-thing-under-test
-source_sha: db07d8b5051d68cb311f0ccbfa25147eb1b754846574ddb10d3a4a3170fc67af
-derived: 2026-09-23
+source_sha: 6854d974767e8efa24f3528bbe56f820cdc11577c041df84029b1e27df84524f
+derived: 2026-10-06
 measured_on: 2026-09-23
 
 ---
@@ -65,6 +65,11 @@ Before trusting a check that reports a clean result, **construct the input that 
 For a measurement, run the instrument on a case it **must** detect. Twenty words lifted verbatim from a
 document scored 100% on the same function that scored every real question 0.0 — which is how the dead
 gate was found. **Measure the measurer before believing its zero.**
+
+A control can also arrive as a specification: a six-gram leakage gate was implemented exactly
+as specified, yet could not fire. Construct an input that makes the gate reject before treating
+its clean output as evidence. Writing the check before the implementation or data exists is a
+cheap precaution; the timing explanation remains a hypothesis, not a proven cause.
 
 ## The tell
 

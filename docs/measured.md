@@ -5,30 +5,27 @@ Back to the [README](../README.md).
 ⚠ **Every measurement we have comes from one repo, one team and one corpus.** That is the limit we
 most want help with, and it is why this is published at all.
 
-## Why you would want it: three things we learned
+## Why you would want it: things we learned
 
 Every team has a set of knowings that live in someone's head, a stale wiki, or a 40-page rules file
 nobody re-reads. In almost every case the rule WAS written down. It was written down somewhere the reader is not, at a
 moment they are not thinking about it.
 
-We ran this on our own repo for four months and measured it. ⚠ **These three numbers are ours, from
+We ran this on our own repo for four months and measured it. ⚠ **These observations are ours, from
 our own corpus, and you cannot reproduce them from this repo**: they are here because they are the
 reasons the design looks the way it does, not as claims about your codebase. The full write-ups, with
 method and caveats, are linked at the bottom.
 
-Three things we learned that are worth your time before you decide:
+Things we learned that are worth your time before you decide:
 
 - **A knowing can be delivered on the exact call it was written for and change nothing.** Ours fired on
   the precise command it was written to prevent, and the mistake happened anyway, because the channel
   we used speaks *after* the command runs. Speaking and blocking are different tools and picking wrong
   is invisible.
-- **Noise can cost accuracy, on some models.** An irrelevant note took a task our cheap tier already
-  did perfectly from 100% to 35%. We re-ran that on two other model families in September and the
-  harm did **not** reproduce on either: the irrelevant note scored about the same as delivering
-  nothing at all. So the narrow matching and the small budget are cheap insurance against a cost we
-  have measured once and failed to reproduce twice, not a law.
-- **A note rots while looking exactly as confident as the day you wrote it.** 9% of ours had drifted
-  from their sources when we last measured, so the store checks for that and says so.
+- **Irrelevant notes and stale notes are risks the design limits.** Narrow bindings and a small
+  delivery budget reduce unwanted interruptions; freshness checks flag source drift. The earlier
+  accuracy-drop and drift-percentage figures are omitted because they are not recorded in the
+  verified claims ledger.
 
 If those sound like problems you have, this is a 5 minute install with no service and no account.
 If your rules are already enforced by CI and linters, you probably do not need it.
@@ -56,7 +53,7 @@ If your rules are already enforced by CI and linters, you probably do not need i
 
 ## The write-ups
 
-The three write-ups below carry the method and the caveats behind every number on this page, including
+The three write-ups below carry the method and the caveats behind the historical observations, including
 the ones that went against us:
 
 1. [Crystal memory: notes that arrive when you act, not when you go looking](https://dev.to/tom_jones_230c4659491adcd/crystal-memory-notes-that-arrive-when-you-act-not-when-you-go-looking-83): the delivery mechanism, and a placebo-controlled test of whether it changes behaviour at all.

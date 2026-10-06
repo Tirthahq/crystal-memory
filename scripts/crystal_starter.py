@@ -8,11 +8,11 @@ install. A handful of universal crystals in their store on day one makes the loo
 have written anything of their own.
 
 ⛔ THIS DOES NOT BREAK THE MINTING RULE. The rule is *never mint from IMPORTED text* — text we did not
-observe the outcome of. It is not "ship empty". Every crystal in starter/ was
+observe the outcome of. It is not "ship empty". Every crystal in crystals-standalone/starter/ was
 observed here, on our own work, and rewritten to stand alone: no links into our node store, no internal
 node names, no dependency on our repo. They ship as OURS BY OBSERVATION, with provenance in the body.
 
-WHERE THEY LIVE, AND WHY NOT UNDER memory/. The starter files sit in `starter/`,
+WHERE THEY LIVE, AND WHY NOT UNDER memory/. The starter files sit in `crystals-standalone/starter/`,
 OUTSIDE `memory/`, so our own registry never loads them. Under memory/ they would register here as
 near-duplicates of the live crystals they were derived from — two versions of one knowing to keep in
 sync, which is the exact drift the store fights.

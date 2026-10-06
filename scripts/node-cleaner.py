@@ -429,6 +429,17 @@ def main():
     for path in (*configured_boot, *([os.environ["MEMORY_INDEX_FILE"]] if os.environ.get("MEMORY_INDEX_FILE") else [])):
         contract.require(path)
     args = sys.argv[1:]
+    # ⛔ 2026-09-30: an unrecognised flag (incl. --help) used to fall through to consolidate(). That is a dry
+    # run unless --apply, so it was never destructive, but a typo like `--aply` silently ran the DRY path and
+    # read as a successful clean. Same shape as escalation-audit.py's _argv_gate: help is inert, unknown refuses.
+    if any(a in ("-h", "--help") for a in args):
+        print("usage: node-cleaner.py [--apply] [--limit N]  |  --summary  |  --retire <path.md>... [--apply]\n"
+              "       (no --apply = dry run: reports what it WOULD consolidate, writes nothing)")
+        return 0
+    unknown = [a for a in args if a.startswith("-") and a not in ("--summary", "--apply", "--retire", "--limit")]
+    if unknown:
+        print(f"node-cleaner.py: unrecognised flag(s): {' '.join(unknown)} (try --help)", file=sys.stderr)
+        return 2
     if "--summary" in args:
         return summary()
     apply = "--apply" in args

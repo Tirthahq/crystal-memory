@@ -74,7 +74,9 @@ def main():
                  # governed truth) and is surfaced by scripts/scratchpad-boot.py, never by NODE-INDEX.
                  # Giving it frontmatter would make it a node it deliberately is not. Flagged at every
                  # boot since ~2026-07-15; it was always a false positive. IDEA-session-scratchpad-working-memory
-                 "scratchpad.md"}
+                 "scratchpad.md",
+                 # CLAUDE.md is an auto-loaded instruction file, not a node.
+                 "CLAUDE.md"}
     # Pattern-skipped: generated artifacts (re-rendered from source — frontmatter would be overwritten) and
     # inbox/board channels (kept plain on purpose so they don't themselves trip node-health). These are NOT
     # nodes; flagging them as "unfindable" is a false positive. A board/generated file added later is covered.

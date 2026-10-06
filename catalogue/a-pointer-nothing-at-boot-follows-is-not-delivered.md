@@ -3,8 +3,8 @@ name: a-pointer-nothing-at-boot-follows-is-not-delivered
 family: A
 symptom: The detail is in the handoff and the next session never read it
 source: crystal-a-pointer-nothing-at-boot-follows-is-not-delivered
-source_sha: bcd45ead3d132e9d6815b543ff89ae44df943e6a3550b4e24deb7ea846d5df94
-derived: 2026-09-26
+source_sha: d295a788ff0eaec617eb50cdd763f4d57b6877a152f99fb4fa0f28fae8fbe666
+derived: 2026-10-06
 measured_on: 2026-09-26
 
 ---
@@ -56,6 +56,11 @@ that reader starts.** If you cannot, the pointer is a name, not a delivery.
 # does any boot hook read the target, or only print its name?
 grep -n "handoff" your-boot-hooks/*   # a match that only formats a path is not a read
 ```
+
+Folding a scratchpad into an archive is the same delivery problem. A boot reader that expands
+only the archive description cannot deliver live facts hidden in its body. Before folding, move
+each still-live fact to the task or handoff its next reader opens, and update the archive description.
+An archive link alone is not evidence those facts arrived.
 
 ## The tell
 

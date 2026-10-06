@@ -112,3 +112,20 @@ pad that is read at boot is the direct fix for it.
 
 ⛔ Which is why it ships **with** the hook. A scratchpad nobody reads at boot is a diary.
 
+
+## Match semantics and delivery order
+
+Matching uses a comma-separated OR-list, case-insensitively. Keys normally match substrings,
+including longer tool names and path prefixes. Keys shorter than five characters, plus
+`guard`, `copy`, `usage`, `board`, `bench`, `reply`, and `price`, require word boundaries
+(no adjacent letters, digits, or underscore): `guard` matches “run guard” but not “guardrails”.
+A missing or empty list admits every context that reaches matching; dependency and act bindings
+still apply. Long writes match their subject and target path rather than their whole body.
+
+Delivery orders eligible notes by how often they have spoken in the current session first.
+Within each rotation tier, the default ranks word overlap with the act ahead of last-delivery
+time, payload length, and filename. Overlap is Jaccard similarity of lowercase word tokens
+at least three characters long, using the first 1,500 essence characters. `CRYSTAL_ORDER=rotation`
+restores the previous ordering. Backoff, session caps, and the character budget still apply;
+overlap ranks already-matched candidates and does not admit new ones. Adaptive packing is not
+included in this release.

@@ -303,6 +303,14 @@ def tell(c, limit=150):
 
 
 def load_crystals(repo=REPO):
+    # CRYSTAL_STORE_ROOT (2026-09-30, crystal lab E0): when set and non-empty, walk
+    # <CRYSTAL_STORE_ROOT>/memory INSTEAD of the repo's, whatever `repo` the caller passed —
+    # crystal_act.candidates() passes the repo explicitly, so an argument-only override would never
+    # reach the real hook path. Unset (or empty) = byte-identical behaviour. Paths come back relative
+    # to the store root. Tested both directions: scripts/test_crystal_store_override.py.
+    store = os.environ.get("CRYSTAL_STORE_ROOT")
+    if store:
+        repo = store
     out = []
     for root in ROOTS:
         base = os.path.join(repo, root)
@@ -570,7 +578,11 @@ if __name__ == "__main__":
 # that decide whether the store is alive were unanswerable: which crystals actually fire, which NEVER
 # fire (dead weight), which fire constantly (wallpaper risk — the inject-budget failure mode). This
 # appends one line per delivery. Hot path: never raises, never blocks a hook.
-DELIVERY_LOG = os.path.join(REPO, "memory", "corpus", "crystal-deliveries.jsonl")
+# Env-overridable (CRYSTAL_DELIVERY_LOG) so a hook replay / test harness can point it at a temp file:
+# .claude/settings.json exports CRYSTAL_RAG=1 into every session shell, so a replay that inherits the
+# env used to append fixture rows to the REAL ledger (found 2026-09-26). Default path unchanged.
+DELIVERY_LOG = (os.environ.get("CRYSTAL_DELIVERY_LOG")
+                or os.path.join(REPO, "memory", "corpus", "crystal-deliveries.jsonl"))
 
 
 ARRIVAL_EXCLUDED_PREFIX = "displaced"
@@ -585,8 +597,14 @@ def is_arrival(rec):
     ⚠ A shared rule does NOT share a population (crystal-an-instrument-that-answers-is-anyone-waiting
     -can-be-wrong-two-ways): each caller still decides WHICH rows it walks. This only settles what
     counts as an arrival once a row is in hand.
+    ⛔ A CANDIDATE SNAPSHOT is never an arrival, whatever its event says: one row written 2026-09-27
+    before the `displaced:` prefix existed (`event="candidate-snapshot"`, no `crystal` field) passed
+    this predicate and crashed crystal-telemetry with KeyError 'crystal' every night 10-03..10-05.
     """
-    return not str((rec or {}).get("event") or "").startswith(ARRIVAL_EXCLUDED_PREFIX)
+    rec = rec or {}
+    if rec.get("channel") == "act-candidates":
+        return False
+    return not str(rec.get("event") or "").startswith(ARRIVAL_EXCLUDED_PREFIX)
 
 
 def record_delivery(channel, path, score=None, event=None, act=None, session=None, detail=None):
