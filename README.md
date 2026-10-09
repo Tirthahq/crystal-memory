@@ -1,9 +1,9 @@
 # Crystals
 
 **Your coding agent keeps making the same mistake, even though you wrote the rule down.**
-Crystals hands that rule to the agent in the second before it acts, so nobody has to remember to look it up.
+Crystals hands that rule to the agent at the moment it acts, so nobody has to remember to look it up.
 
-![A crystal arriving in the second before a piped build command runs](docs/demo/fire.gif)
+![A crystal firing on a piped build command](docs/demo/fire.gif)
 
 **Install in 3 steps** (needs [Claude Code](https://claude.com/claude-code), Python 3 and a git repo; no service, no account, no network):
 
@@ -29,7 +29,7 @@ crystal:
 1. **A crystal is a markdown note with a binding.** `on: bash` names the action it belongs to.
    `match:` lists alternative keys that can match that action.
 2. **The agent is about to run** `npm run build 2>&1 | tail -20`.
-3. **Claude Code runs a hook just before the command.** The hook sees `| tail`, finds the note, and puts it in the agent's context.
+3. **Claude Code runs a hook as the command is issued.** The hook sees `| tail`, finds the note, and adds it to the agent's context.
 4. **The note says why that is dangerous:** `tail` reports its own exit code, so a failed build reads as a pass.
 5. **An unrelated command gets nothing.** The first line of the real output for `ls -la`:
 
@@ -39,6 +39,8 @@ crystal:
 
 The agent did not ask. It did not know the note existed. That is the whole idea.
 
+**What the timing means today, stated plainly.** The hook fires before the command runs, but by then the agent has already chosen the command, and it reads the note together with the command's result. So in this release a crystal shapes the agent's next step, not the step it is on. We have watched our own agent read a warning about the exact command it had just run. A mode that refuses the command once and hands back the note, so the agent sees it before anything executes, is in testing and is not in this release.
+
 ---
 
 ## Why not a rules file, or a search index?
@@ -47,12 +49,12 @@ The agent did not ask. It did not know the note existed. That is the whole idea.
   RULES FILE (CLAUDE.md)      SEARCH INDEX (RAG, wiki)       CRYSTAL
   ----------------------      ------------------------       -------
   always loaded               only if someone searches       only when the act matches
-  one line in a long file     you must suspect the answer    arrives before the act
+  one line in a long file     you must suspect the answer    arrives with the act
   becomes background noise    to write the query             silent the rest of the time
 ```
 
 You cannot look up the mistake you do not know you are about to make: forming the query means already suspecting the answer.
-A crystal skips the looking. It is quiet almost all the time, and speaks in the one second where the note matters.
+A crystal skips the looking. It is quiet almost all the time, and speaks at the moment the note is about.
 
 **The cost is real:** a human writes every note, one at a time.
 We tried generating them from a codebase and it invented a statistic that appeared nowhere in the source.

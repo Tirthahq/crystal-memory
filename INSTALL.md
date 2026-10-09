@@ -389,7 +389,7 @@ crystal:
 ---
 
 <!-- crystal:essence -->
-The knowing itself. Short. Written to be read in the second before an act, by someone
+The knowing itself. Short. Written to be read at the moment of an act, by someone
 who is about to make the mistake it prevents.
 <!-- /crystal:essence -->
 ```
