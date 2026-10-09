@@ -39,7 +39,7 @@ crystal:
 
 The agent did not ask. It did not know the note existed. That is the whole idea.
 
-**What the timing means today, stated plainly.** The hook fires before the command runs, but by then the agent has already chosen the command, and it reads the note together with the command's result. So in this release a crystal shapes the agent's next step, not the step it is on. We have watched our own agent read a warning about the exact command it had just run. A mode that refuses the command once and hands back the note, so the agent sees it before anything executes, is in testing and is not in this release.
+**What the timing means today, stated plainly.** The hook fires before the command runs, but by then the agent has already chosen the command, and it reads the note together with the command's result. So in this release a crystal shapes the agent's next step. We have watched our own agent read a warning about the exact command it had just run. A mode that refuses the command once and hands back the note, so the agent sees it before anything executes, is in testing and will ship in a later release.
 
 ---
 
