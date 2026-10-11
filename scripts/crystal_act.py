@@ -42,7 +42,7 @@ CRYSTAL_HOLDBACK_PCT opts into deterministic session/crystal/act suppression (0-
 Unset or 0 leaves delivery unchanged. Never enabled by settings here.
 Delivery failures exit 0; invalid CLI flags exit non-zero.
 """
-import argparse, hashlib, json, os, re, select, sys, time
+import argparse, hashlib, json, os, re, select, sys, time, unicodedata
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -330,13 +330,27 @@ HEAD_CHARS = 600         # path + title + frontmatter + lede: what the write is 
 LONG_CTX = 2000          # above this, body-only keyword hits stop predicting relevance
 
 
+_MATCH_CONFUSABLES = dict(zip("аеорсхуѕіјԁɡοαεικνρτυχ", "aeopcxysijdgoaeikvrtyx"))
+_MATCH_CONFUSABLES.update({ch.upper(): latin for ch, latin in list(_MATCH_CONFUSABLES.items())})
+_MATCH_TRANSLATION = str.maketrans({
+    **_MATCH_CONFUSABLES,
+    **dict.fromkeys("\u200b\u200c\u200d\u2060\ufeff\u00ad", None),
+})
+
+
+def normalize_match(text):
+    """Canonicalize act text and keys without changing their matching semantics."""
+    text = unicodedata.normalize("NFKC", text).translate(_MATCH_TRANSLATION)
+    return "".join(" " if unicodedata.category(ch) == "Zs" else ch for ch in text).lower()
+
+
 def match_scope(ctx, target="", long_ctx=None, head=None):
     """The text a `match:` key must appear in for this act. See the note above."""
     long_ctx = LONG_CTX if long_ctx is None else long_ctx
     head = HEAD_CHARS if head is None else head
     ctx = ctx or ""
     subject = ctx if len(ctx) <= long_ctx else ctx[:head]
-    return (subject + " " + (target or "")).lower()
+    return normalize_match(subject + " " + (target or ""))
 
 
 # Fixed task-named English keys; do not classify tool/path prefixes as words.
@@ -372,13 +386,15 @@ def matches_ctx(c, ctx_l):
                             for p in prefixes)
             if competing:
                 return False
-    mp = (c.get("match") or "").strip().lower()
+    mp = normalize_match(c.get("match") or "").strip()
     if not mp:
         return True
     keys = [k.strip() for k in mp.split(",") if k.strip()]
     return (not keys) or any(
-        bool(re.search(r"(?<!\w)" + re.escape(k) + r"(?!\w)", ctx_l))
-        if len(k) < 5 or k in _BOUNDARY_KEYS else k in ctx_l
+        # A boundary only on a side that ends in a word char: `post-` stays a prefix key, `|tail` still needs one.
+        bool(re.search((r"(?<!\w)" if re.match(r"\w", k) else "") + re.escape(k)
+                       + (r"(?!\w)" if re.search(r"\w$", k) else ""), ctx_l))
+        if len(k) <= 5 or k in _BOUNDARY_KEYS else k in ctx_l
         for k in keys)
 
 
@@ -1249,6 +1265,30 @@ def selftest():
         check(not matches_ctx({"match": key}, inside)
               and matches_ctx({"match": key}, f"run {key} now"),
               f"key hygiene: {key} needs word boundaries")
+    for key, inside, positive in (("cargo", "escargot", "cargo build"),
+                                  ("|tail", "log|tailspin", "log |tail -n 5"),
+                                  ("<<eof", "<<EOFILE", "cat <<EOF\ntext\nEOF")):
+        check(not matches_ctx({"match": key}, match_scope(inside))
+              and matches_ctx({"match": key}, match_scope(positive)),
+              f"key hygiene: length-5 {key} rejects the audited false fire, keeps the real command")
+    check(matches_ctx({"match": "post-"}, match_scope("memory/business/drafts/POST-linkedin.md"))
+          and not matches_ctx({"match": "post-"}, match_scope("a repost-like thing")),
+          "key hygiene: a key ending in a symbol stays a prefix key (no trailing boundary)")
+    for key, context in (("ssh", "s\u200bsh"), ("ssh", "ѕsh"),
+                         ("git status", "git\u2009status"), ("ssh", "ｓｓｈ")):
+        check(matches_ctx({"match": key}, match_scope(context)),
+              f"key normalization: audited {context!r} now matches {key!r}")
+        check(matches_ctx({"match": context}, match_scope(key)),
+              f"key normalization: keys receive the same normalization for {context!r}")
+    for invisible in "\u200b\u200c\u200d\u2060\ufeff\u00ad":
+        check(matches_ctx({"match": "ssh"}, match_scope("s" + invisible + "sh")),
+              f"key normalization: strip U+{ord(invisible):04X}")
+    for space in "\u2009\u00a0\u3000\u1680":
+        check(matches_ctx({"match": "git status"}, match_scope("git" + space + "status")),
+              f"key normalization: space separator U+{ord(space):04X}")
+    check(normalize_match("аеорсхуѕіјԁɡοαεικνρτυχ") == "aeopcxysijdgoaeikvrtyx"
+          and normalize_match("АЕОРСХУЅІЈԀꞬΟΑΕΙΚΝΡΤΥΧ") == "aeopcxysijdgoaeikvrtyx",
+          "key normalization: Cyrillic/Greek confusables fold in either case")
     check(matches_ctx({"match": "dispatch-codex"}, "scripts/dispatch-codex.py")
           and matches_ctx({"match": "ssm-run"}, "ssm-run.py")
           and matches_ctx({"match": "ask-grok"}, "ask-grok.py")
