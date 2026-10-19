@@ -1,3 +1,100 @@
+## Any-agent Python package (this round)
+
+The core, CLI and MCP stdio server support Python 3.11–3.14 without runtime
+third-party dependencies. The existing shell installer below is the Claude Code
+path. The Python path needs no Bash, WSL, model or GPU. The opencode plugin is
+outside this round. MCP matching is read-only: it returns all matching knowings,
+without consuming the Claude hooks' session budget or recording deliveries.
+An MCP call supplies context only when the agent calls it; this is not automatic
+pre-tool injection or enforcement.
+
+### Windows / PowerShell
+
+Install from Git (Git must be on PATH). The branch is pinned to the commit CI passed on:
+
+```powershell
+py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install "git+https://github.com/tjonesit/crystals.git@1a65c22"
+```
+
+`@any-agent-package` follows the branch instead of the pinned commit. From a
+local checkout, `python -m pip install .` works too.
+
+Choose a project directory, for example `C:\work\my-project`, containing
+`memory\crystals\*.md`. Existing crystal files can be copied there. For a first
+run, save this as `memory\crystals\exit-code.md` (UTF-8; LF or CRLF both parse):
+
+```markdown
+---
+crystal:
+  deliver: act
+  on: bash
+  match: | tail, | head
+  who: all
+---
+<!-- crystal:essence -->
+A pipe reports the final command's exit code. Check the tested command itself.
+<!-- /crystal:essence -->
+```
+
+```powershell
+.\.venv\Scripts\python.exe -m crystals --store "C:\work\my-project" --act bash --text "go test ./... | tail"
+```
+
+Expected: a JSON array with `path`, bindings and the authored `essence`; an
+unmatched action returns `[]`. Missing `memory/` is an error. `bash` is an act
+name: the matcher never runs that command. `CRYSTAL_STORE_ROOT`, if set,
+overrides the store for compatibility with existing deployments.
+
+### MCP stdio
+
+Configure your MCP client with an absolute interpreter path and argument array:
+
+```json
+{
+  "command": "C:\\work\\my-project\\.venv\\Scripts\\python.exe",
+  "args": ["-m", "crystals.mcp", "--store", "C:\\work\\my-project"]
+}
+```
+
+The server exposes one read-only tool, `match`, with required string arguments
+`act` and `text`, plus optional `target` and `who`. Acts: `bash`, `write`,
+`commit`, `prompt`, `boot`, `delegate`. Set `who` to your reader tier (for example
+`frontier`) to include that tier plus `who: all` bindings. The default `all`
+selects bindings authored for all readers. This is the server launch contract,
+not an opencode plugin/configuration change; use it in your client's local stdio
+MCP registration. No HTTP listener is provided.
+
+MCP uses newline-delimited UTF-8 JSON-RPC, negotiates protocol versions
+2024-11-05, 2025-03-26 or 2025-06-18, and reserves stdout for protocol messages.
+See the [stdio specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
+and [tools specification](https://modelcontextprotocol.io/specification/2025-06-18/server/tools).
+
+### Library and verification
+
+```python
+from crystals import match
+knowings = match("bash", "go test ./... | tail", store="path/to/project")
+```
+
+`crystals/` contains the shared act matcher, registry/parser, redactor, CLI,
+MCP adapter and Windows helpers. `scripts/crystal_act.py` and
+`scripts/crystal_registry.py` are compatibility entry points into that package;
+`install.sh` copies it alongside the hooks and backs up changed package modules
+on upgrade. Existing hook backoff, packing, telemetry and flags remain intact.
+
+Run `python -m unittest discover -s tests -v`,
+`python scripts/crystal_act.py --selftest`, and on POSIX
+`sh install.sh --selftest`. The matrix runs Windows, Ubuntu and macOS with
+Python 3.11, 3.12, 3.13 and 3.14. Tests cover CRLF equality, reserved-device-name
+walk pruning, shell-free matching, LF ledger output, CREATE_NO_WINDOW, expiry,
+CLI, and initialize → tools/list → match over real stdio pipes. The suite repeats
+warm; do not publish Windows first-touch CI time as matcher latency.
+
+Native Windows CI and Mikhail's Windows + opencode run are acceptance still to
+be observed; local macOS tests cannot establish those results.
+
+
 # Crystals: a 5 minute install
 
 A crystal is a short knowing bound to an **act** rather than to a topic. When your coding agent is
@@ -389,7 +486,7 @@ crystal:
 ---
 
 <!-- crystal:essence -->
-The knowing itself. Short. Written to be read at the moment of an act, by someone
+The knowing itself. Short. Written to be read in the second before an act, by someone
 who is about to make the mistake it prevents.
 <!-- /crystal:essence -->
 ```

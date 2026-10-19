@@ -1,9 +1,11 @@
+> Any-agent Python core, CLI and MCP stdio: see [Windows and Python setup](INSTALL.md#any-agent-python-package-this-round). This round is uncommitted; Windows CI and Mikhail’s run remain to be observed.
+
 # Crystals
 
 **Your coding agent keeps making the same mistake, even though you wrote the rule down.**
-Crystals hands that rule to the agent at the moment it acts, so nobody has to remember to look it up.
+Crystals hands that rule to the agent in the second before it acts, so nobody has to remember to look it up.
 
-![A crystal firing on a piped build command](docs/demo/fire.gif)
+![A crystal arriving in the second before a piped build command runs](docs/demo/fire.gif)
 
 **Install in 3 steps** (needs [Claude Code](https://claude.com/claude-code), Python 3 and a git repo; no service, no account, no network):
 
@@ -29,7 +31,7 @@ crystal:
 1. **A crystal is a markdown note with a binding.** `on: bash` names the action it belongs to.
    `match:` lists alternative keys that can match that action.
 2. **The agent is about to run** `npm run build 2>&1 | tail -20`.
-3. **Claude Code runs a hook as the command is issued.** The hook sees `| tail`, finds the note, and adds it to the agent's context.
+3. **Claude Code runs a hook just before the command.** The hook sees `| tail`, finds the note, and puts it in the agent's context.
 4. **The note says why that is dangerous:** `tail` reports its own exit code, so a failed build reads as a pass.
 5. **An unrelated command gets nothing.** The first line of the real output for `ls -la`:
 
@@ -39,8 +41,6 @@ crystal:
 
 The agent did not ask. It did not know the note existed. That is the whole idea.
 
-**What the timing means today, stated plainly.** The hook fires before the command runs, but by then the agent has already chosen the command, and it reads the note together with the command's result. So in this release a crystal shapes the agent's next step. We have watched our own agent read a warning about the exact command it had just run. A mode that refuses the command once and hands back the note, so the agent sees it before anything executes, is in testing and will ship in a later release.
-
 ---
 
 ## Why not a rules file, or a search index?
@@ -49,12 +49,12 @@ The agent did not ask. It did not know the note existed. That is the whole idea.
   RULES FILE (CLAUDE.md)      SEARCH INDEX (RAG, wiki)       CRYSTAL
   ----------------------      ------------------------       -------
   always loaded               only if someone searches       only when the act matches
-  one line in a long file     you must suspect the answer    arrives with the act
+  one line in a long file     you must suspect the answer    arrives before the act
   becomes background noise    to write the query             silent the rest of the time
 ```
 
 You cannot look up the mistake you do not know you are about to make: forming the query means already suspecting the answer.
-A crystal skips the looking. It is quiet almost all the time, and speaks at the moment the note is about.
+A crystal skips the looking. It is quiet almost all the time, and speaks in the one second where the note matters.
 
 **The cost is real:** a human writes every note, one at a time.
 We tried generating them from a codebase and it invented a statistic that appeared nowhere in the source.
@@ -298,3 +298,60 @@ at least three characters long, using the first 1,500 essence characters. `CRYST
 restores the previous ordering. Backoff, session caps, and the character budget still apply;
 overlap ranks already-matched candidates and does not admit new ones. Adaptive packing is not
 included in this release.
+
+## Optional local intent journal (any-agent Python)
+
+Inspired by [Meta's LogAct](https://github.com/facebookresearch/logact)
+([paper](https://arxiv.org/abs/2604.07988), MIT; see [LOGACT-NOTICE](LOGACT-NOTICE)).
+This is an independent stdlib implementation. It complements crystal delivery.
+`match()` and the MCP matcher remain read-only. Nothing is configured automatically.
+
+Before an act, use the existing CLI with an explicit session:
+
+```text
+python -m crystals --store YOUR_PROJECT --act bash --text "your proposed command" --intent-log --session SESSION_ID
+```
+
+The output includes `knowings`, `intent_id`, and startup `recovery` (unresolved
+intents from all sessions). The intent is fsynced to
+`YOUR_PROJECT/scratch/intent-log.jsonl` before the CLI returns. Only proceed with
+the act after exit code 0. After the act, append the matching terminal state:
+
+```text
+python -m crystals.intent --store YOUR_PROJECT committed INTENT_ID
+python -m crystals.intent --store YOUR_PROJECT aborted INTENT_ID
+```
+
+Use `committed` after success and `aborted` after cancellation/failure. These are
+outcome markers, not permission decisions or Git commits. A failed act may have
+partially changed its environment; an abort does not undo it. If another gate
+blocks execution, the harness must write `aborted` for that same ID.
+
+At session startup (including a restart after a crash):
+
+```text
+python -m crystals.intent --store YOUR_PROJECT recover
+```
+
+Pending means the outcome is **unknown**, even if the external act happened
+before its post-hook could record success. Inspect the environment before any
+manual retry. The journal never auto-replays, rolls back, or executes a command.
+A torn final JSON line is retained and reported; new acts fail closed until an
+operator inspects and preserves/repairs that tail. Other corruption raises.
+Normal records are append-only; this is not a tamper-proof security boundary.
+Raw act text is local data: do not put credentials or sensitive data in it.
+
+Python callers can use `IntentLog(project).action(act, text, session)` as a
+context manager around their own act. `IntentLog(...).recovery` reports startup
+state; `begin()` and `finish()` expose the same explicit pre/post lifecycle.
+The OS lock serializes cooperating writers and is released if a process dies.
+All journal bytes are UTF-8/LF; no shell, model, network, or new dependency.
+
+Validation: `python -m unittest discover -s tests -v` includes real process-crash
+and concurrent-writer tests. The existing portable-python matrix discovers
+these on Windows, macOS, and Ubuntu (Python 3.11–3.14). Windows execution remains
+pending until that workflow runs; it was not run during this local handback.
+
+## Thanks
+
+**Mikhail (@ManSio)** made the Windows support real. He tested every build on Windows 11 from a clean install, attacked it on purpose, and found the bugs we could not see from macOS and Linux: the UTF-8 BOM that made crystals vanish (fixed in `d557917`), the symlink that let a crystal be read from outside the store (fixed in `1a65c22`), and the input-validation holes in key matching (2026-10-10). Each fix went back to him and he re-tested it. This package would not work on Windows without him.

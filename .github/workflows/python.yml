@@ -1,0 +1,22 @@
+name: portable-python
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        python: ['3.11', '3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - run: python -m unittest discover -s tests -v
+      - run: python scripts/crystal_act.py --selftest
+      # Repeat warm: Windows Defender first-touch time is not a latency claim.
+      - run: python -m unittest discover -s tests -v
+      - if: runner.os != 'Windows'
+        run: sh install.sh --selftest

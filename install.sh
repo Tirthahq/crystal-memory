@@ -36,6 +36,10 @@ DEST=$(pwd)
 SCRIPTS="crystal_act.py crystal_registry.py crystallize-stop-hook.py crystal_inject.py
          crystal_starter.py crystal_scratchpad.py crystal_handoff.py crystal_growth.py
          crystal_midflight.py crystal_uncommitted.py crystal-discriminators.py redact.py"
+# Install the same implementation beside legacy script adapters.
+for module in "$SRC"/crystals/*.py; do
+  SCRIPTS="$SCRIPTS ../crystals/$(basename "$module")"
+done
 
 MODE=install
 case "${1:-}" in
@@ -152,6 +156,7 @@ same=0
 skipped=0
 BACKUP=""
 for f in $SCRIPTS; do
+  mkdir -p "$(dirname "scripts/$f")"
   if [ ! -f "$SRC/scripts/$f" ]; then
     echo "  MISSING in package: $f" >&2
     exit 2
@@ -167,6 +172,7 @@ for f in $SCRIPTS; do
       BACKUP="scratch/crystal-upgrade-backup/$(date +%Y%m%d-%H%M%S)-$$"
       mkdir -p "$BACKUP/scripts"
     fi
+    mkdir -p "$(dirname "$BACKUP/scripts/$f")"
     cp "scripts/$f" "$BACKUP/scripts/$f"
     cp "$SRC/scripts/$f" "scripts/$f"
     echo "  new   scripts/$f  (old copy in $BACKUP/)"
@@ -195,7 +201,7 @@ echo
 echo "  $copied copied, $replaced replaced, $same already current, $skipped differ and were left alone," \
      "$seeded crystal(s) seeded"
 if [ -n "$BACKUP" ]; then
-  echo "  roll back with: cp $BACKUP/scripts/* scripts/"
+  echo "  roll back with: cp -R $BACKUP/. ."
 fi
 if [ "$skipped" -gt 0 ]; then
   echo "  ⚠ $skipped script(s) are NOT the package version. To take it: sh \"$SRC/install.sh\" --upgrade"
